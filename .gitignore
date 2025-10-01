@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+*.log
+logs/
+data/logs/
+
+# Database
+*.db
+*.sqlite
+data/*.db
+
+# Credentials & Tokens
+credentials.json
+tokens/
+.credentials/
+google_credentials.json
+ticktick_tokens.json
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Coverage reports
+coverage/
+.nyc_output/
+
+# Docker
+.docker/
+
+# Backup files
+data/backup/
+*.backup
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
