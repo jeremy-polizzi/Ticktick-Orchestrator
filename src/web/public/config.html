@@ -221,6 +221,48 @@
             </div>
         </div>
 
+        <!-- Guide d'obtention des clés API -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-warning">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">
+                            <i class="bi bi-lightbulb me-2"></i>Comment obtenir vos clés API ?
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6><i class="bi bi-check2-square me-1"></i>TickTick Developer</h6>
+                                <ol class="small">
+                                    <li>Visitez <a href="https://developer.ticktick.com/" target="_blank" class="text-warning">developer.ticktick.com</a></li>
+                                    <li>Connectez-vous avec votre compte TickTick</li>
+                                    <li>Cliquez "Create App" → Nom de votre app</li>
+                                    <li>Copiez <strong>Client ID</strong> et <strong>Client Secret</strong></li>
+                                    <li>Ajoutez redirect URI: <code>https://157.90.22.27:3443/api/config/auth/ticktick/callback</code></li>
+                                </ol>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="bi bi-google me-1"></i>Google Cloud Console</h6>
+                                <ol class="small">
+                                    <li>Visitez <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-warning">console.cloud.google.com</a></li>
+                                    <li>Créez un projet ou sélectionnez-en un</li>
+                                    <li>Activez Google Calendar API</li>
+                                    <li>Create Credentials → OAuth 2.0 Client ID</li>
+                                    <li>Type: Web application</li>
+                                    <li>Redirect URI: <code>https://157.90.22.27:3443/api/config/auth/google/callback</code></li>
+                                </ol>
+                            </div>
+                        </div>
+                        <div class="alert alert-info mt-3 mb-0">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Astuce :</strong> Gardez ces onglets ouverts pour copier-coller facilement vos clés dans les formulaires ci-dessous !
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="row">
             <!-- Configuration TickTick -->
             <div class="col-lg-6 mb-4">
@@ -233,20 +275,34 @@
                     <div class="card-body">
                         <form id="ticktickForm">
                             <div class="mb-3">
-                                <label for="ticktickClientId" class="form-label">Client ID</label>
+                                <label for="ticktickClientId" class="form-label">
+                                    <i class="bi bi-key me-1"></i>TickTick Client ID
+                                </label>
                                 <input type="text" class="form-control" id="ticktickClientId"
-                                       placeholder="Votre TickTick Client ID">
+                                       placeholder="ex: abc123def456" spellcheck="false">
                                 <div class="form-text text-muted">
-                                    Obtenez votre Client ID depuis le dashboard développeur TickTick
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    <strong>Comment l'obtenir :</strong>
+                                    <a href="https://developer.ticktick.com/" target="_blank" class="text-warning">
+                                        TickTick Developer Console
+                                    </a> → Create App → Client ID
                                 </div>
                             </div>
 
                             <div class="mb-3">
-                                <label for="ticktickClientSecret" class="form-label">Client Secret</label>
-                                <input type="password" class="form-control" id="ticktickClientSecret"
-                                       placeholder="Votre TickTick Client Secret">
+                                <label for="ticktickClientSecret" class="form-label">
+                                    <i class="bi bi-shield-lock me-1"></i>TickTick Client Secret
+                                </label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" id="ticktickClientSecret"
+                                           placeholder="Collez votre clé secrète ici" spellcheck="false">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('ticktickClientSecret')">
+                                        <i class="bi bi-eye" id="ticktickSecretIcon"></i>
+                                    </button>
+                                </div>
                                 <div class="form-text text-muted">
-                                    Votre clé secrète TickTick (gardez-la confidentielle)
+                                    <i class="bi bi-shield-check me-1"></i>
+                                    <strong>Confidentiel :</strong> Ne partagez jamais cette clé. Elle sera chiffrée localement.
                                 </div>
                             </div>
 
@@ -274,20 +330,34 @@
                     <div class="card-body">
                         <form id="googleForm">
                             <div class="mb-3">
-                                <label for="googleClientId" class="form-label">Client ID</label>
+                                <label for="googleClientId" class="form-label">
+                                    <i class="bi bi-google me-1"></i>Google Client ID
+                                </label>
                                 <input type="text" class="form-control" id="googleClientId"
-                                       placeholder="Votre Google Client ID">
+                                       placeholder="ex: 123456789-abc.apps.googleusercontent.com" spellcheck="false">
                                 <div class="form-text text-muted">
-                                    Obtenez votre Client ID depuis Google Cloud Console
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    <strong>Comment l'obtenir :</strong>
+                                    <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-warning">
+                                        Google Cloud Console
+                                    </a> → Create Credentials → OAuth 2.0 Client ID
                                 </div>
                             </div>
 
                             <div class="mb-3">
-                                <label for="googleClientSecret" class="form-label">Client Secret</label>
-                                <input type="password" class="form-control" id="googleClientSecret"
-                                       placeholder="Votre Google Client Secret">
+                                <label for="googleClientSecret" class="form-label">
+                                    <i class="bi bi-shield-lock me-1"></i>Google Client Secret
+                                </label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" id="googleClientSecret"
+                                           placeholder="Collez votre Google Client Secret ici" spellcheck="false">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('googleClientSecret')">
+                                        <i class="bi bi-eye" id="googleSecretIcon"></i>
+                                    </button>
+                                </div>
                                 <div class="form-text text-muted">
-                                    Votre clé secrète Google (gardez-la confidentielle)
+                                    <i class="bi bi-shield-check me-1"></i>
+                                    <strong>Confidentiel :</strong> Clé d'accès OAuth2 pour Google Calendar API
                                 </div>
                             </div>
 

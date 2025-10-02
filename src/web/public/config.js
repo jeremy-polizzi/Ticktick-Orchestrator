@@ -512,7 +512,59 @@ function goToDashboard() {
     }
 }
 
+// Fonction pour toggle la visibilité des mots de passe
+function togglePassword(fieldId) {
+    const field = document.getElementById(fieldId);
+    const icon = document.getElementById(fieldId.replace('Secret', 'SecretIcon'));
+
+    if (field.type === 'password') {
+        field.type = 'text';
+        icon.className = 'bi bi-eye-slash';
+    } else {
+        field.type = 'password';
+        icon.className = 'bi bi-eye';
+    }
+}
+
+// Fonction pour pré-remplir les champs avec les valeurs actuelles
+function populateCurrentValues(config) {
+    // Remplir les champs TickTick si disponibles
+    if (config.ticktick?.clientId && config.ticktick.clientId !== '***configured***') {
+        document.getElementById('ticktickClientId').value = config.ticktick.clientId;
+    }
+
+    // Remplir les champs Google si disponibles
+    if (config.google?.clientId && config.google.clientId !== '***configured***') {
+        document.getElementById('googleClientId').value = config.google.clientId;
+    }
+
+    // Pour les secrets, on ne les affiche pas mais on indique s'ils sont configurés
+    if (config.ticktick?.clientId === '***configured***') {
+        document.getElementById('ticktickClientSecret').placeholder = '••••••••••••••• (configuré)';
+    }
+
+    if (config.google?.clientId === '***configured***') {
+        document.getElementById('googleClientSecret').placeholder = '••••••••••••••• (configuré)';
+    }
+}
+
+// Amélioration de la fonction loadCurrentConfig pour utiliser le pré-remplissage
+function enhanceConfigLoading() {
+    const originalLoad = window.configApp?.loadCurrentConfig;
+    if (originalLoad) {
+        window.configApp.loadCurrentConfig = async function() {
+            await originalLoad.call(this);
+            const response = await this.makeRequest('GET', '/api/config/current');
+            if (response.success) {
+                populateCurrentValues(response.config);
+            }
+        };
+    }
+}
+
 // Initialiser l'application
 document.addEventListener('DOMContentLoaded', () => {
     window.configApp = new ConfigApp();
+    // Améliorer le chargement après l'initialisation
+    setTimeout(enhanceConfigLoading, 100);
 });
