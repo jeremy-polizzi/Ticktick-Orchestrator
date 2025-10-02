@@ -140,11 +140,13 @@ router.post('/test/ticktick', async (req, res) => {
     }
 
     // Test basique de la configuration TickTick
-    const TickTickAPI = require('../../api/ticktick-api');
-    const ticktick = new TickTickAPI();
+    // Créer une URL d'autorisation avec les nouveaux credentials
+    const authUrl = `https://ticktick.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${config.ticktick.redirectUri}&scope=tasks:write tasks:read`;
 
-    // Générer l'URL d'autorisation pour vérifier la config
-    const authUrl = ticktick.getAuthorizationUrl();
+    // Validation simple du format
+    if (!clientId.match(/^[a-zA-Z0-9_-]+$/)) {
+      throw new Error('Format Client ID invalide');
+    }
 
     res.json({
       success: true,
@@ -174,11 +176,13 @@ router.post('/test/google', async (req, res) => {
     }
 
     // Test basique de la configuration Google
-    const GoogleCalendarAPI = require('../../api/google-calendar-api');
-    const google = new GoogleCalendarAPI();
+    // Créer une URL d'autorisation avec les nouveaux credentials
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=code&redirect_uri=${config.google.redirectUri}&scope=https://www.googleapis.com/auth/calendar&access_type=offline`;
 
-    // Générer l'URL d'autorisation pour vérifier la config
-    const authUrl = google.getAuthorizationUrl();
+    // Validation simple du format Google Client ID
+    if (!clientId.includes('.googleusercontent.com')) {
+      throw new Error('Format Google Client ID invalide (doit finir par .googleusercontent.com)');
+    }
 
     res.json({
       success: true,
@@ -198,10 +202,13 @@ router.post('/test/google', async (req, res) => {
 // Autorisation TickTick
 router.get('/auth/ticktick', async (req, res) => {
   try {
-    const TickTickAPI = require('../../api/ticktick-api');
-    const ticktick = new TickTickAPI();
+    // Utiliser la configuration actuelle du .env
+    const authUrl = `https://ticktick.com/oauth/authorize?client_id=${config.ticktick.clientId}&response_type=code&redirect_uri=${config.ticktick.redirectUri}&scope=tasks:write tasks:read`;
 
-    const authUrl = ticktick.getAuthorizationUrl();
+    if (!config.ticktick.clientId || config.ticktick.clientId === 'your-ticktick-client-id') {
+      throw new Error('TickTick Client ID non configuré');
+    }
+
     res.redirect(authUrl);
 
   } catch (error) {
@@ -248,10 +255,13 @@ router.get('/auth/ticktick/callback', async (req, res) => {
 // Autorisation Google Calendar
 router.get('/auth/google', async (req, res) => {
   try {
-    const GoogleCalendarAPI = require('../../api/google-calendar-api');
-    const google = new GoogleCalendarAPI();
+    // Utiliser la configuration actuelle du .env
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.google.clientId}&response_type=code&redirect_uri=${config.google.redirectUri}&scope=https://www.googleapis.com/auth/calendar&access_type=offline`;
 
-    const authUrl = google.getAuthorizationUrl();
+    if (!config.google.clientId || config.google.clientId === 'your-google-client-id') {
+      throw new Error('Google Client ID non configuré');
+    }
+
     res.redirect(authUrl);
 
   } catch (error) {
