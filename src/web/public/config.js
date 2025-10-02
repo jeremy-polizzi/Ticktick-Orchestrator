@@ -503,6 +503,15 @@ function logout() {
     window.location.href = '/login?logout=success';
 }
 
+function goToDashboard() {
+    const token = localStorage.getItem('token');
+    if (token) {
+        window.location.href = `/dashboard?token=${token}`;
+    } else {
+        window.location.href = '/login';
+    }
+}
+
 // Initialiser l'application
 document.addEventListener('DOMContentLoaded', () => {
     window.configApp = new ConfigApp();

@@ -132,6 +132,15 @@ class OrchestratorApp {
         this.showAlert('Déconnecté avec succès', 'info');
     }
 
+    goToConfig() {
+        // Rediriger vers la page de configuration avec le token
+        if (this.token) {
+            window.location.href = `/config?token=${this.token}`;
+        } else {
+            this.showLoginModal();
+        }
+    }
+
     showLoginModal() {
         const modal = new bootstrap.Modal(document.getElementById('loginModal'));
         modal.show();
@@ -635,6 +644,7 @@ window.refreshScheduler = () => app.refreshScheduler();
 window.showAuthModal = () => app.showAuthModal();
 window.showConfigModal = () => app.showConfigModal();
 window.logout = () => app.logout();
+window.goToConfig = () => app.goToConfig();
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
