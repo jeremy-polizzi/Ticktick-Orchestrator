@@ -45,9 +45,17 @@ router.post('/login', authRateLimit, async (req, res) => {
 
     logger.info(`Connexion admin réussie depuis ${req.ip}`);
 
+    // Définir le token dans un cookie sécurisé HTTP-only
+    res.cookie('token', token, {
+      httpOnly: true,     // Empêche l'accès JavaScript côté client
+      secure: true,       // Uniquement HTTPS
+      sameSite: 'strict', // Protection CSRF
+      maxAge: 24 * 60 * 60 * 1000, // 24 heures
+      path: '/'           // Disponible sur tout le site
+    });
+
     res.json({
       success: true,
-      token,
       user: {
         username: 'admin',
         role: 'admin',
@@ -66,8 +74,14 @@ router.post('/login', authRateLimit, async (req, res) => {
 
 // Déconnexion
 router.post('/logout', (req, res) => {
-  // Avec JWT, la déconnexion est côté client
-  // On peut ajouter une blacklist des tokens si nécessaire
+  // Supprimer le cookie sécurisé
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'strict',
+    path: '/'
+  });
+
   logger.info(`Déconnexion depuis ${req.ip}`);
 
   res.json({
@@ -79,7 +93,7 @@ router.post('/logout', (req, res) => {
 // Vérification du token
 router.get('/verify', (req, res) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = authHeader && authHeader.split(' ')[1] || req.cookies?.token;
 
   if (!token) {
     return res.status(401).json({

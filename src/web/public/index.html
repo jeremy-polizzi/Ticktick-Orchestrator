@@ -203,48 +203,134 @@
             color: var(--text-light);
             box-shadow: 0 0 0 0.2rem rgba(64, 128, 253, 0.25);
         }
+
+        .form-control::placeholder {
+            color: #adb5bd;
+        }
+
+        .nav-link {
+            color: var(--text-light) !important;
+        }
+
+        .nav-link:hover {
+            color: var(--primary-color) !important;
+        }
+
+        .dropdown-menu-dark {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+        }
+
+        .dropdown-item {
+            color: var(--text-light) !important;
+        }
+
+        .dropdown-item:hover, .dropdown-item:focus {
+            background: rgba(64, 128, 253, 0.1);
+            color: var(--primary-color) !important;
+        }
+
+        .navbar-toggler {
+            border-color: var(--border-color);
+        }
+
+        .navbar-toggler-icon {
+            filter: invert(1);
+        }
+
+        .text-muted {
+            color: #6c757d !important;
+        }
+
+        /* Forcer toutes les polices sur thème sombre */
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--text-light) !important;
+        }
+
+        p, span, div, label, strong, small {
+            color: var(--text-light) !important;
+        }
+
+        .card-title {
+            color: var(--text-light) !important;
+        }
+
+        .card-text {
+            color: var(--text-light) !important;
+        }
+
+        .form-label {
+            color: var(--text-light) !important;
+        }
+
+        .btn {
+            color: var(--text-light) !important;
+        }
+
+        .btn-warning {
+            color: #000 !important;
+        }
+
+        .table {
+            color: var(--text-light) !important;
+        }
+
+        .table th, .table td {
+            color: var(--text-light) !important;
+            border-color: var(--border-color) !important;
+        }
+
+        .modal-title {
+            color: var(--text-light) !important;
+        }
+
+        .modal-body {
+            color: var(--text-light) !important;
+        }
+
+        .list-unstyled li {
+            color: var(--text-light) !important;
+        }
+
+        code {
+            background: rgba(64, 128, 253, 0.1);
+            color: var(--primary-color) !important;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+        }
+
+        /* Override Bootstrap defaults */
+        * {
+            color: inherit;
+        }
+
+        body * {
+            color: var(--text-light);
+        }
+
+        .text-dark {
+            color: var(--text-light) !important;
+        }
     </style>
 </head>
 <body>
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
         <div class="container">
-            <a class="navbar-brand" href="#">
+            <a class="navbar-brand" href="#" onclick="goHome()">
                 <i class="bi bi-robot"></i> TickTick Orchestrator
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="#dashboard" data-tab="dashboard">
-                            <i class="bi bi-speedometer2"></i> Dashboard
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#tasks" data-tab="tasks">
-                            <i class="bi bi-list-task"></i> Tâches
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#calendar" data-tab="calendar">
-                            <i class="bi bi-calendar3"></i> Calendrier
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#scheduler" data-tab="scheduler">
-                            <i class="bi bi-clock"></i> Planificateur
-                        </a>
-                    </li>
-                </ul>
-                <div class="navbar-nav">
+                <div class="navbar-nav ms-auto">
                     <div class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-gear"></i> Paramètres
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark">
-                            <li><a class="dropdown-item" href="#" onclick="goToConfig()">
+                            <li><a class="dropdown-item" href="#" onclick="console.log('Clic sur Configuration APIs'); goToConfig();">
                                 <i class="bi bi-gear"></i> Configuration APIs
                             </a></li>
                             <li><a class="dropdown-item" href="#" onclick="showAuthModal()">
@@ -637,5 +723,28 @@
 
     <!-- App JS -->
     <script src="app.js"></script>
+
+    <!-- Initialize App -->
+    <script>
+        // Initialize app when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initialisation de l\'app...');
+
+            // Initialize Bootstrap tabs explicitly
+            const triggerTabList = document.querySelectorAll('#mainTabs button[data-bs-toggle="tab"]');
+            triggerTabList.forEach(triggerEl => {
+                const tabTrigger = new bootstrap.Tab(triggerEl);
+
+                triggerEl.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    console.log('Tab clicked:', triggerEl.getAttribute('data-bs-target'));
+                    tabTrigger.show();
+                });
+            });
+
+            // Initialize main app
+            window.app = new OrchestratorApp();
+        });
+    </script>
 </body>
 </html>

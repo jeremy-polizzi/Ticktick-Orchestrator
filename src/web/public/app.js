@@ -1,7 +1,6 @@
 // TickTick Orchestrator - Frontend Application
 class OrchestratorApp {
     constructor() {
-        this.token = localStorage.getItem('token');
         this.isAuthenticated = false;
         this.init();
     }
@@ -23,23 +22,58 @@ class OrchestratorApp {
 
     setupEventListeners() {
         // Login form
-        document.getElementById('loginForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.login();
-        });
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.login();
+            });
+        }
 
         // Natural command input
-        document.getElementById('naturalCommand').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.executeCommand();
-            }
-        });
+        const naturalCommand = document.getElementById('naturalCommand');
+        if (naturalCommand) {
+            naturalCommand.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.executeCommand();
+                }
+            });
+        }
 
-        // Tab switching
+        // Tab switching - Both Bootstrap events AND manual click handling
         document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+            // Bootstrap tab event
             tab.addEventListener('shown.bs.tab', (e) => {
                 const targetTab = e.target.getAttribute('data-bs-target').substring(1);
+                console.log('Bootstrap tab switch to:', targetTab);
                 this.handleTabSwitch(targetTab);
+            });
+
+            // Manual click event as fallback
+            tab.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetTab = e.target.getAttribute('data-bs-target')?.substring(1) ||
+                                e.target.closest('[data-bs-target]')?.getAttribute('data-bs-target')?.substring(1);
+
+                if (targetTab) {
+                    console.log('Manual tab click to:', targetTab);
+
+                    // Remove active class from all tabs and content
+                    document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+                    document.querySelectorAll('.tab-pane').forEach(pane => {
+                        pane.classList.remove('show', 'active');
+                    });
+
+                    // Add active class to clicked tab and target content
+                    e.target.classList.add('active');
+                    const targetContent = document.getElementById(targetTab);
+                    if (targetContent) {
+                        targetContent.classList.add('show', 'active');
+                    }
+
+                    // Load tab content
+                    this.handleTabSwitch(targetTab);
+                }
             });
         });
 
@@ -54,24 +88,12 @@ class OrchestratorApp {
     // === AUTHENTICATION ===
 
     async checkAuth() {
-        if (!this.token) {
-            this.isAuthenticated = false;
-            return;
-        }
-
         try {
             const response = await this.apiCall('/auth/verify', 'GET');
             this.isAuthenticated = response.valid;
-
-            if (!this.isAuthenticated) {
-                localStorage.removeItem('token');
-                this.token = null;
-            }
         } catch (error) {
             console.error('Auth check failed:', error);
             this.isAuthenticated = false;
-            localStorage.removeItem('token');
-            this.token = null;
         }
 
         this.updateAuthUI();
@@ -100,8 +122,6 @@ class OrchestratorApp {
             const data = await response.json();
 
             if (data.success) {
-                this.token = data.token;
-                localStorage.setItem('token', this.token);
                 this.isAuthenticated = true;
 
                 // Hide login modal
@@ -123,9 +143,13 @@ class OrchestratorApp {
         }
     }
 
-    logout() {
-        localStorage.removeItem('token');
-        this.token = null;
+    async logout() {
+        try {
+            await this.apiCall('/auth/logout', 'POST');
+        } catch (error) {
+            console.error('Erreur logout:', error);
+        }
+
         this.isAuthenticated = false;
         this.updateAuthUI();
         this.showLoginModal();
@@ -133,10 +157,27 @@ class OrchestratorApp {
     }
 
     goToConfig() {
-        // Rediriger vers la page de configuration avec le token
-        if (this.token) {
-            window.location.href = `/config?token=${this.token}`;
+        console.log('goToConfig() appelée');
+        console.log('Authentifié:', this.isAuthenticated);
+
+        // Rediriger vers la page de configuration
+        if (this.isAuthenticated) {
+            console.log('Redirection vers: /config');
+            window.location.href = '/config';
         } else {
+            console.log('Pas authentifié, affichage modal login');
+            this.showLoginModal();
+        }
+    }
+
+    goHome() {
+        console.log('goHome() appelée');
+        // Rediriger vers l'accueil
+        if (this.isAuthenticated) {
+            console.log('Redirection vers: /');
+            window.location.href = '/';
+        } else {
+            console.log('Pas authentifié, affichage modal login');
             this.showLoginModal();
         }
     }
@@ -162,12 +203,9 @@ class OrchestratorApp {
             method,
             headers: {
                 'Content-Type': 'application/json'
-            }
+            },
+            credentials: 'include'  // Inclure les cookies dans les requêtes
         };
-
-        if (this.token) {
-            config.headers['Authorization'] = `Bearer ${this.token}`;
-        }
 
         if (data && method !== 'GET') {
             config.body = JSON.stringify(data);
@@ -618,14 +656,246 @@ class OrchestratorApp {
 
     // === MODALS ===
 
-    showAuthModal() {
-        // Modal pour gérer les authentifications TickTick/Google
-        alert('Modal d\'authentification - À implémenter');
+    async showAuthModal() {
+        // Charger les statuts des connexions
+        try {
+            const [ticktickStatus, googleStatus] = await Promise.all([
+                this.apiCall('/auth/ticktick/status'),
+                this.apiCall('/auth/google/status')
+            ]);
+
+            // Créer le contenu de la modal
+            const modalContent = `
+                <div class="modal fade" id="authModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content bg-dark">
+                            <div class="modal-header border-secondary">
+                                <h5 class="modal-title">
+                                    <i class="bi bi-key"></i> Gestion Authentification
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card mb-3">
+                                            <div class="card-header">
+                                                <h6 class="mb-0"><i class="bi bi-check-circle"></i> TickTick</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="d-flex align-items-center mb-3">
+                                                    <span class="status-indicator ${ticktickStatus.connected ? 'status-connected' : 'status-disconnected'}"></span>
+                                                    <span>${ticktickStatus.connected ? 'Connecté' : 'Déconnecté'}</span>
+                                                </div>
+                                                ${ticktickStatus.connected ?
+                                                    '<button class="btn btn-warning btn-sm" onclick="window.app.disconnectTickTick()">Déconnecter</button>' :
+                                                    '<button class="btn btn-primary btn-sm" onclick="window.app.connectTickTick()">Se connecter</button>'
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card mb-3">
+                                            <div class="card-header">
+                                                <h6 class="mb-0"><i class="bi bi-calendar3"></i> Google Calendar</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="d-flex align-items-center mb-3">
+                                                    <span class="status-indicator ${googleStatus.connected ? 'status-connected' : 'status-disconnected'}"></span>
+                                                    <span>${googleStatus.connected ? 'Connecté' : 'Déconnecté'}</span>
+                                                </div>
+                                                ${googleStatus.connected ?
+                                                    '<button class="btn btn-warning btn-sm" onclick="window.app.disconnectGoogle()">Déconnecter</button>' :
+                                                    '<button class="btn btn-primary btn-sm" onclick="window.app.connectGoogle()">Se connecter</button>'
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i>
+                                    <strong>Info :</strong> Les connexions OAuth2 permettent à l'orchestrateur d'accéder à vos données TickTick et Google Calendar de manière sécurisée.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Supprimer modal existante
+            const existingModal = document.getElementById('authModal');
+            if (existingModal) existingModal.remove();
+
+            // Ajouter la nouvelle modal
+            document.body.insertAdjacentHTML('beforeend', modalContent);
+
+            // Afficher la modal
+            const modal = new bootstrap.Modal(document.getElementById('authModal'));
+            modal.show();
+
+        } catch (error) {
+            console.error('Erreur chargement authentification:', error);
+            this.showAlert('Erreur lors du chargement des informations d\'authentification', 'danger');
+        }
     }
 
-    showConfigModal() {
-        // Modal pour la configuration
-        alert('Modal de configuration - À implémenter');
+    async connectTickTick() {
+        try {
+            // Redirection vers l'autorisation TickTick via la route de config
+            window.open('/api/config/auth/ticktick', '_blank');
+            this.showAlert('Fenêtre d\'autorisation TickTick ouverte', 'info');
+        } catch (error) {
+            this.showAlert('Erreur lors de la connexion TickTick', 'danger');
+        }
+    }
+
+    async disconnectTickTick() {
+        try {
+            await this.apiCall('/auth/ticktick/disconnect', 'POST');
+            this.showAlert('TickTick déconnecté avec succès', 'warning');
+            // Recharger la modal
+            this.showAuthModal();
+        } catch (error) {
+            this.showAlert('Erreur lors de la déconnexion TickTick', 'danger');
+        }
+    }
+
+    async connectGoogle() {
+        try {
+            // Redirection vers l'autorisation Google via la route de config
+            window.open('/api/config/auth/google', '_blank');
+            this.showAlert('Fenêtre d\'autorisation Google Calendar ouverte', 'info');
+        } catch (error) {
+            this.showAlert('Erreur lors de la connexion Google Calendar', 'danger');
+        }
+    }
+
+    async disconnectGoogle() {
+        try {
+            await this.apiCall('/auth/google/disconnect', 'POST');
+            this.showAlert('Google Calendar déconnecté avec succès', 'warning');
+            // Recharger la modal
+            this.showAuthModal();
+        } catch (error) {
+            this.showAlert('Erreur lors de la déconnexion Google Calendar', 'danger');
+        }
+    }
+
+    async showConfigModal() {
+        // Charger la configuration actuelle
+        try {
+            const currentConfig = await this.apiCall('/api/config/current');
+
+            const modalContent = `
+                <div class="modal fade" id="configModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content bg-dark">
+                            <div class="modal-header border-secondary">
+                                <h5 class="modal-title">
+                                    <i class="bi bi-sliders"></i> Paramètres Avancés
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <form id="configForm">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6><i class="bi bi-clock"></i> Planificateur</h6>
+                                            <div class="mb-3">
+                                                <label class="form-label">Heure quotidienne (6h par défaut)</label>
+                                                <input type="time" class="form-control" id="dailyTime" value="${currentConfig.config.scheduler.dailyTime}">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Intervalle sync (minutes)</label>
+                                                <input type="number" class="form-control" id="syncInterval" value="${currentConfig.config.scheduler.syncInterval}" min="5" max="120">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Max tâches/jour</label>
+                                                <input type="number" class="form-control" id="maxTasks" value="${currentConfig.config.scheduler.maxDailyTasks}" min="1" max="10">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6><i class="bi bi-calendar3"></i> Calendriers</h6>
+                                            <div class="mb-3">
+                                                <label class="form-label">Calendrier Jeremy</label>
+                                                <input type="email" class="form-control" id="jeremyCalendar" value="${currentConfig.config.calendar.jeremyCalendarId}">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Calendrier Business</label>
+                                                <input type="email" class="form-control" id="businessCalendar" value="${currentConfig.config.calendar.businessCalendarId}">
+                                            </div>
+                                            <h6><i class="bi bi-shield"></i> Sécurité</h6>
+                                            <div class="mb-3">
+                                                <label class="form-label">Nouveau mot de passe admin</label>
+                                                <input type="password" class="form-control" id="newPassword" placeholder="Laisser vide pour ne pas changer">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i>
+                                        <strong>Info :</strong> Ces paramètres affectent le comportement global de l'orchestrateur. Un redémarrage peut être nécessaire.
+                                    </div>
+                                    <div class="d-flex justify-content-end">
+                                        <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Annuler</button>
+                                        <button type="submit" class="btn btn-primary">Sauvegarder</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Supprimer modal existante
+            const existingModal = document.getElementById('configModal');
+            if (existingModal) existingModal.remove();
+
+            // Ajouter la nouvelle modal
+            document.body.insertAdjacentHTML('beforeend', modalContent);
+
+            // Setup form handler
+            document.getElementById('configForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await this.saveAdvancedConfig();
+            });
+
+            // Afficher la modal
+            const modal = new bootstrap.Modal(document.getElementById('configModal'));
+            modal.show();
+
+        } catch (error) {
+            console.error('Erreur chargement configuration:', error);
+            this.showAlert('Erreur lors du chargement des paramètres', 'danger');
+        }
+    }
+
+    async saveAdvancedConfig() {
+        try {
+            const formData = {
+                dailyTime: document.getElementById('dailyTime').value,
+                syncInterval: parseInt(document.getElementById('syncInterval').value),
+                maxDailyTasks: parseInt(document.getElementById('maxTasks').value),
+                jeremyCalendarId: document.getElementById('jeremyCalendar').value,
+                businessCalendarId: document.getElementById('businessCalendar').value
+            };
+
+            const newPassword = document.getElementById('newPassword').value;
+            if (newPassword) {
+                formData.adminPassword = newPassword;
+            }
+
+            await this.apiCall('/api/config/save', 'POST', formData);
+
+            this.showAlert('Paramètres sauvegardés avec succès', 'success');
+
+            // Fermer la modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('configModal'));
+            modal.hide();
+
+        } catch (error) {
+            console.error('Erreur sauvegarde config:', error);
+            this.showAlert('Erreur lors de la sauvegarde des paramètres', 'danger');
+        }
     }
 }
 
@@ -645,8 +915,23 @@ window.showAuthModal = () => app.showAuthModal();
 window.showConfigModal = () => app.showConfigModal();
 window.logout = () => app.logout();
 window.goToConfig = () => app.goToConfig();
+window.goHome = () => app.goHome();
+
+// Global error handler
+window.addEventListener('error', (event) => {
+    console.error('Erreur JavaScript globale:', event.error);
+    console.error('Message:', event.message);
+    console.error('Fichier:', event.filename);
+    console.error('Ligne:', event.lineno);
+});
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    window.app = new OrchestratorApp();
+    console.log('DOM loaded, initialisation de l\'app...');
+    try {
+        window.app = new OrchestratorApp();
+        console.log('App initialisée avec succès');
+    } catch (error) {
+        console.error('Erreur lors de l\'initialisation de l\'app:', error);
+    }
 });

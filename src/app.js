@@ -36,8 +36,9 @@ class OrchestratorApp {
           defaultSrc: ["'self'"],
           styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
           scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+          scriptSrcAttr: ["'unsafe-inline'"], // Permettre les handlers onclick
           imgSrc: ["'self'", "data:", "https:"],
-          connectSrc: ["'self'", "https://api.ticktick.com", "https://www.googleapis.com"]
+          connectSrc: ["'self'", "https://api.ticktick.com", "https://www.googleapis.com", "https://cdn.jsdelivr.net"]
         }
       }
     }));
@@ -62,6 +63,10 @@ class OrchestratorApp {
     this.app.use(express.json({ limit: '10mb' }));
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+    // Cookie parsing pour les tokens sécurisés
+    const cookieParser = require('cookie-parser');
+    this.app.use(cookieParser());
+
     // Logging des requêtes
     this.app.use((req, res, next) => {
       logger.info(`${req.method} ${req.path} - ${req.ip}`);
@@ -77,10 +82,28 @@ class OrchestratorApp {
     const configRoutes = require('./web/routes/config');
     this.app.use('/api/config', authenticateToken, configRoutes);
 
-    // Interface web (PROTÉGÉE - redirection vers login si non authentifié)
+    // Interface web (redirection intelligente selon auth)
     this.app.get('/', (req, res) => {
-      // Toujours rediriger vers login - l'authentification se fait côté client
-      res.redirect('/login');
+      // Vérifier si l'utilisateur est authentifié
+      const token = req.headers.authorization?.split(' ')[1] || req.cookies?.token;
+
+      if (token) {
+        // Vérifier la validité du token
+        const jwt = require('jsonwebtoken');
+        const config = require('./config/config');
+
+        try {
+          jwt.verify(token, config.security.jwtSecret);
+          // Token valide - rediriger vers dashboard (SANS token dans URL)
+          res.redirect('/dashboard');
+        } catch (error) {
+          // Token invalide - rediriger vers login
+          res.redirect('/login?error=expired');
+        }
+      } else {
+        // Pas de token - rediriger vers login
+        res.redirect('/login');
+      }
     });
 
     // Page de login (publique)
@@ -91,7 +114,7 @@ class OrchestratorApp {
     // Dashboard (protégé)
     this.app.get('/dashboard', (req, res) => {
       // Vérifier si l'utilisateur est authentifié
-      const token = req.headers.authorization?.split(' ')[1] || req.query.token;
+      const token = req.headers.authorization?.split(' ')[1] || req.cookies?.token;
 
       if (!token) {
         return res.redirect('/login');
@@ -112,7 +135,7 @@ class OrchestratorApp {
     // Page de configuration (protégée)
     this.app.get('/config', (req, res) => {
       // Vérifier si l'utilisateur est authentifié
-      const token = req.headers.authorization?.split(' ')[1] || req.query.token;
+      const token = req.headers.authorization?.split(' ')[1] || req.cookies?.token;
 
       if (!token) {
         return res.redirect('/login');

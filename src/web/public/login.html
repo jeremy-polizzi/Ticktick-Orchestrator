@@ -109,8 +109,42 @@
         .footer-text {
             text-align: center;
             margin-top: 2rem;
-            color: #6c757d;
+            color: #6c757d !important;
             font-size: 0.875rem;
+        }
+
+        .text-muted {
+            color: #6c757d !important;
+        }
+
+        /* Forcer toutes les polices sur thème sombre */
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--text-light) !important;
+        }
+
+        p, span, div, label, strong, small {
+            color: var(--text-light) !important;
+        }
+
+        .form-label {
+            color: var(--text-light) !important;
+        }
+
+        .btn {
+            color: var(--text-light) !important;
+        }
+
+        .btn-primary {
+            color: white !important;
+        }
+
+        /* Override Bootstrap defaults */
+        body * {
+            color: var(--text-light);
+        }
+
+        .text-dark {
+            color: var(--text-light) !important;
         }
 
         .security-info {
@@ -261,14 +295,11 @@
                     const data = await response.json();
 
                     if (data.success) {
-                        // Sauvegarder le token
-                        localStorage.setItem('token', data.token);
-
                         this.showAlert('Connexion réussie ! Redirection...', 'success');
 
-                        // Redirection vers le dashboard
+                        // Redirection vers le dashboard (le token est maintenant dans les cookies)
                         setTimeout(() => {
-                            window.location.href = `/dashboard?token=${data.token}`;
+                            window.location.href = '/dashboard';
                         }, 1000);
 
                     } else {

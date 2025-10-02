@@ -1,15 +1,10 @@
 class ConfigApp {
     constructor() {
-        this.token = localStorage.getItem('token');
         this.init();
     }
 
     async init() {
-        // Vérifier l'authentification
-        if (!this.token) {
-            window.location.href = '/login';
-            return;
-        }
+        // Vérifier l'authentification se fait côté serveur via cookies
 
         // Charger les données initiales
         await this.loadCurrentConfig();
@@ -415,9 +410,9 @@ class ConfigApp {
         const config = {
             method,
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.token}`
-            }
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include'
         };
 
         if (data && method !== 'GET') {
@@ -427,7 +422,6 @@ class ConfigApp {
         const response = await fetch(url, config);
 
         if (response.status === 401) {
-            localStorage.removeItem('token');
             window.location.href = '/login?error=expired';
             return;
         }
@@ -499,17 +493,21 @@ function loadConfig() {
 }
 
 function logout() {
-    localStorage.removeItem('token');
-    window.location.href = '/login?logout=success';
+    // La déconnexion se fait côté serveur via API
+    fetch('/auth/logout', {
+        method: 'POST',
+        credentials: 'include'
+    }).then(() => {
+        window.location.href = '/login?logout=success';
+    });
 }
 
 function goToDashboard() {
-    const token = localStorage.getItem('token');
-    if (token) {
-        window.location.href = `/dashboard?token=${token}`;
-    } else {
-        window.location.href = '/login';
-    }
+    window.location.href = '/dashboard';
+}
+
+function goHome() {
+    window.location.href = '/';
 }
 
 // Fonction pour toggle la visibilité des mots de passe

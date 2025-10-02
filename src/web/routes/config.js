@@ -24,8 +24,8 @@ router.get('/current', async (req, res) => {
         redirectUri: config.google.redirectUri
       },
       calendar: {
-        jeremyCalendarId: config.calendar.jeremyCalendarId,
-        businessCalendarId: config.calendar.businessCalendarId
+        jeremyCalendarId: config.calendars.jeremy,
+        businessCalendarId: config.calendars.business
       },
       scheduler: {
         dailyTime: config.scheduler.dailyTime,

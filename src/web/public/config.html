@@ -127,6 +127,132 @@
             color: #6c757d !important;
         }
 
+        .form-text {
+            color: #6c757d !important;
+        }
+
+        .small {
+            color: var(--text-light) !important;
+        }
+
+        .navbar-nav .nav-link {
+            color: var(--text-light) !important;
+        }
+
+        .navbar-nav .nav-link:hover {
+            color: var(--primary-color) !important;
+        }
+
+        .btn-outline-light {
+            color: var(--text-light);
+            border-color: var(--text-light);
+        }
+
+        .btn-outline-light:hover {
+            background: var(--text-light);
+            color: var(--dark-bg);
+        }
+
+        .btn-outline-danger {
+            color: var(--danger-color);
+            border-color: var(--danger-color);
+        }
+
+        .btn-outline-danger:hover {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        /* Forcer toutes les polices sur thème sombre */
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--text-light) !important;
+        }
+
+        p, span, div, label, strong, small {
+            color: var(--text-light) !important;
+        }
+
+        .card-title {
+            color: var(--text-light) !important;
+        }
+
+        .card-text {
+            color: var(--text-light) !important;
+        }
+
+        .form-label {
+            color: var(--text-light) !important;
+        }
+
+        .btn {
+            color: var(--text-light) !important;
+        }
+
+        .btn-primary {
+            color: white !important;
+        }
+
+        .btn-warning {
+            color: #000 !important;
+        }
+
+        .btn-success {
+            color: white !important;
+        }
+
+        .btn-danger {
+            color: white !important;
+        }
+
+        .table {
+            color: var(--text-light) !important;
+        }
+
+        .table th, .table td {
+            color: var(--text-light) !important;
+            border-color: var(--border-color) !important;
+        }
+
+        .list-unstyled li {
+            color: var(--text-light) !important;
+        }
+
+        code {
+            background: rgba(64, 128, 253, 0.1);
+            color: var(--primary-color) !important;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+        }
+
+        ol li {
+            color: var(--text-light) !important;
+        }
+
+        a {
+            color: var(--warning-color) !important;
+        }
+
+        a:hover {
+            color: var(--primary-color) !important;
+        }
+
+        /* Override Bootstrap defaults */
+        body * {
+            color: var(--text-light);
+        }
+
+        .text-dark {
+            color: var(--text-light) !important;
+        }
+
+        .card-header h5 {
+            color: var(--text-light) !important;
+        }
+
+        .bg-warning {
+            color: #000 !important;
+        }
+
         .config-section {
             margin-bottom: 2rem;
         }
@@ -151,7 +277,7 @@
     <!-- Navigation -->
     <nav class="navbar navbar-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/">
+            <a class="navbar-brand" href="#" onclick="goHome()">
                 <i class="bi bi-robot me-2"></i>TickTick Orchestrator
             </a>
             <div class="d-flex align-items-center">

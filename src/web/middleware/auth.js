@@ -6,7 +6,7 @@ const logger = require('../../utils/logger');
 // Middleware d'authentification JWT
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Format: "Bearer TOKEN"
+  const token = authHeader && authHeader.split(' ')[1] || req.cookies?.token; // Vérifier Bearer token OU cookie
 
   if (!token) {
     return res.status(401).json({
@@ -54,7 +54,7 @@ async function verifyAdminPassword(password) {
 // Middleware optionnel pour les routes publiques avec token
 function optionalAuth(req, res, next) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = authHeader && authHeader.split(' ')[1] || req.cookies?.token;
 
   if (token) {
     jwt.verify(token, config.security.jwtSecret, (err, user) => {
