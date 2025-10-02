@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion - TickTick Orchestrator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #4080FD;
+            --dark-bg: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text-light: #f8f9fa;
+            --border-color: #404040;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--dark-bg) 0%, #2a2a2a 100%);
+            color: var(--text-light);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-container {
+            max-width: 400px;
+            width: 100%;
+            padding: 2rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .brand-logo {
+            color: var(--primary-color);
+            font-size: 3rem;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .brand-title {
+            color: var(--primary-color);
+            font-weight: bold;
+            font-size: 1.5rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .form-control {
+            background: rgba(64, 128, 253, 0.1);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-light);
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(64, 128, 253, 0.25);
+            background: rgba(64, 128, 253, 0.1);
+            color: var(--text-light);
+        }
+
+        .form-control::placeholder {
+            color: #adb5bd;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 500;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary:hover {
+            background: #3366cc;
+            border-color: #3366cc;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(64, 128, 253, 0.3);
+        }
+
+        .btn-primary:disabled {
+            background: #6c757d;
+            border-color: #6c757d;
+        }
+
+        .alert {
+            border: none;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .spinner-grow-sm {
+            width: 1rem;
+            height: 1rem;
+        }
+
+        .footer-text {
+            text-align: center;
+            margin-top: 2rem;
+            color: #6c757d;
+            font-size: 0.875rem;
+        }
+
+        .security-info {
+            background: rgba(64, 128, 253, 0.1);
+            border: 1px solid rgba(64, 128, 253, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1.5rem;
+            text-align: center;
+        }
+
+        .security-info i {
+            color: var(--primary-color);
+            font-size: 1.2rem;
+            margin-right: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <!-- Logo et titre -->
+        <div class="text-center mb-4">
+            <div class="brand-logo">
+                <i class="bi bi-robot"></i>
+            </div>
+            <div class="brand-title">TickTick Orchestrator</div>
+            <p class="text-muted">Connexion Administrateur Requise</p>
+        </div>
+
+        <!-- Carte de connexion -->
+        <div class="card">
+            <div class="card-body p-4">
+                <!-- Alertes -->
+                <div id="alertContainer"></div>
+
+                <!-- Formulaire de connexion -->
+                <form id="loginForm">
+                    <div class="mb-3">
+                        <label for="password" class="form-label">
+                            <i class="bi bi-shield-lock me-2"></i>Mot de passe administrateur
+                        </label>
+                        <input
+                            type="password"
+                            class="form-control"
+                            id="password"
+                            placeholder="Saisissez votre mot de passe"
+                            required
+                            autocomplete="current-password"
+                        >
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100" id="loginBtn">
+                        <span class="spinner-grow spinner-grow-sm d-none me-2" id="loginSpinner"></span>
+                        <i class="bi bi-box-arrow-in-right me-2" id="loginIcon"></i>
+                        <span id="loginText">Se connecter</span>
+                    </button>
+                </form>
+
+                <!-- Informations de sécurité -->
+                <div class="security-info">
+                    <i class="bi bi-shield-check"></i>
+                    <small>Connexion sécurisée avec authentification JWT</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Information de bas de page -->
+        <div class="footer-text">
+            <small>
+                <i class="bi bi-info-circle me-1"></i>
+                Accès réservé aux administrateurs autorisés
+            </small>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Script de connexion -->
+    <script>
+        class LoginApp {
+            constructor() {
+                this.setupEventListeners();
+                this.checkUrlParams();
+            }
+
+            setupEventListeners() {
+                document.getElementById('loginForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.login();
+                });
+
+                // Enter key sur le champ password
+                document.getElementById('password').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.login();
+                    }
+                });
+            }
+
+            checkUrlParams() {
+                const urlParams = new URLSearchParams(window.location.search);
+
+                if (urlParams.get('error')) {
+                    let message = 'Erreur de connexion';
+                    switch (urlParams.get('error')) {
+                        case 'expired':
+                            message = 'Session expirée, veuillez vous reconnecter';
+                            break;
+                        case 'unauthorized':
+                            message = 'Accès non autorisé';
+                            break;
+                    }
+                    this.showAlert(message, 'warning');
+                }
+
+                if (urlParams.get('logout') === 'success') {
+                    this.showAlert('Déconnexion réussie', 'info');
+                }
+            }
+
+            async login() {
+                const password = document.getElementById('password').value.trim();
+                const loginBtn = document.getElementById('loginBtn');
+                const loginSpinner = document.getElementById('loginSpinner');
+                const loginIcon = document.getElementById('loginIcon');
+                const loginText = document.getElementById('loginText');
+
+                if (!password) {
+                    this.showAlert('Veuillez saisir votre mot de passe', 'warning');
+                    return;
+                }
+
+                // UI loading state
+                loginBtn.disabled = true;
+                loginSpinner.classList.remove('d-none');
+                loginIcon.classList.add('d-none');
+                loginText.textContent = 'Connexion...';
+
+                try {
+                    const response = await fetch('/auth/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ password })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        // Sauvegarder le token
+                        localStorage.setItem('token', data.token);
+
+                        this.showAlert('Connexion réussie ! Redirection...', 'success');
+
+                        // Redirection vers le dashboard
+                        setTimeout(() => {
+                            window.location.href = `/dashboard?token=${data.token}`;
+                        }, 1000);
+
+                    } else {
+                        this.showAlert(data.error || 'Erreur de connexion', 'danger');
+                    }
+
+                } catch (error) {
+                    console.error('Erreur de connexion:', error);
+                    this.showAlert('Erreur de communication avec le serveur', 'danger');
+                } finally {
+                    // Reset UI
+                    loginBtn.disabled = false;
+                    loginSpinner.classList.add('d-none');
+                    loginIcon.classList.remove('d-none');
+                    loginText.textContent = 'Se connecter';
+                }
+            }
+
+            showAlert(message, type = 'info') {
+                const alertContainer = document.getElementById('alertContainer');
+                const alertId = 'alert-' + Date.now();
+
+                const alertDiv = document.createElement('div');
+                alertDiv.id = alertId;
+                alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+
+                let icon = 'bi-info-circle';
+                switch (type) {
+                    case 'success': icon = 'bi-check-circle'; break;
+                    case 'warning': icon = 'bi-exclamation-triangle'; break;
+                    case 'danger': icon = 'bi-x-circle'; break;
+                }
+
+                alertDiv.innerHTML = `
+                    <i class="bi ${icon} me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+
+                alertContainer.appendChild(alertDiv);
+
+                // Auto-remove après 5 secondes
+                setTimeout(() => {
+                    const alert = document.getElementById(alertId);
+                    if (alert) {
+                        const bsAlert = new bootstrap.Alert(alert);
+                        bsAlert.close();
+                    }
+                }, 5000);
+            }
+        }
+
+        // Initialiser l'application au chargement
+        document.addEventListener('DOMContentLoaded', () => {
+            new LoginApp();
+        });
+    </script>
+</body>
+</html>

@@ -3,6 +3,9 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+const https = require('https');
+const http = require('http');
+const fs = require('fs');
 
 const config = require('./config/config');
 const logger = require('./utils/logger');
@@ -59,9 +62,6 @@ class OrchestratorApp {
     this.app.use(express.json({ limit: '10mb' }));
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-    // Static files
-    this.app.use(express.static(path.join(__dirname, 'web/public')));
-
     // Logging des requêtes
     this.app.use((req, res, next) => {
       logger.info(`${req.method} ${req.path} - ${req.ip}`);
@@ -73,9 +73,61 @@ class OrchestratorApp {
     // Routes d'authentification (publiques)
     this.app.use('/auth', authRoutes);
 
-    // Interface web (publique pour la page de login)
+    // Routes de configuration (protégées)
+    const configRoutes = require('./web/routes/config');
+    this.app.use('/api/config', authenticateToken, configRoutes);
+
+    // Interface web (PROTÉGÉE - redirection vers login si non authentifié)
     this.app.get('/', (req, res) => {
-      res.sendFile(path.join(__dirname, 'web/public/index.html'));
+      // Toujours rediriger vers login - l'authentification se fait côté client
+      res.redirect('/login');
+    });
+
+    // Page de login (publique)
+    this.app.get('/login', (req, res) => {
+      res.sendFile(path.join(__dirname, 'web/public/login.html'));
+    });
+
+    // Dashboard (protégé)
+    this.app.get('/dashboard', (req, res) => {
+      // Vérifier si l'utilisateur est authentifié
+      const token = req.headers.authorization?.split(' ')[1] || req.query.token;
+
+      if (!token) {
+        return res.redirect('/login');
+      }
+
+      // Vérifier la validité du token
+      const jwt = require('jsonwebtoken');
+      const config = require('./config/config');
+
+      try {
+        jwt.verify(token, config.security.jwtSecret);
+        res.sendFile(path.join(__dirname, 'web/public/index.html'));
+      } catch (error) {
+        res.redirect('/login?error=expired');
+      }
+    });
+
+    // Page de configuration (protégée)
+    this.app.get('/config', (req, res) => {
+      // Vérifier si l'utilisateur est authentifié
+      const token = req.headers.authorization?.split(' ')[1] || req.query.token;
+
+      if (!token) {
+        return res.redirect('/login');
+      }
+
+      // Vérifier la validité du token
+      const jwt = require('jsonwebtoken');
+      const config = require('./config/config');
+
+      try {
+        jwt.verify(token, config.security.jwtSecret);
+        res.sendFile(path.join(__dirname, 'web/public/config.html'));
+      } catch (error) {
+        res.redirect('/login');
+      }
     });
 
     // Health check (public)
@@ -88,18 +140,33 @@ class OrchestratorApp {
       });
     });
 
+    // Fichiers statiques publics (uniquement CSS, JS, images)
+    this.app.use('/css', express.static(path.join(__dirname, 'web/public/css')));
+    this.app.use('/js', express.static(path.join(__dirname, 'web/public/js')));
+    this.app.use('/img', express.static(path.join(__dirname, 'web/public/img')));
+    this.app.use('/assets', express.static(path.join(__dirname, 'web/public/assets')));
+
+    // Servir les fichiers JS/CSS de l'app seulement
+    this.app.get('/app.js', (req, res) => {
+      res.sendFile(path.join(__dirname, 'web/public/app.js'));
+    });
+    this.app.get('/config.js', (req, res) => {
+      res.sendFile(path.join(__dirname, 'web/public/config.js'));
+    });
+
     // Routes API protégées
     this.app.use('/api/tasks', authenticateToken, taskRoutes);
     this.app.use('/api/calendar', authenticateToken, calendarRoutes);
     this.app.use('/api/scheduler', authenticateToken, schedulerRoutes);
     this.app.use('/api', authenticateToken, apiRoutes);
 
-    // Route catch-all pour SPA
+    // Route catch-all - rediriger vers login
     this.app.get('*', (req, res) => {
       if (req.path.startsWith('/api')) {
         return res.status(404).json({ error: 'Endpoint non trouvé' });
       }
-      res.sendFile(path.join(__dirname, 'web/public/index.html'));
+      // Toutes les autres routes redirigent vers login
+      res.redirect('/login');
     });
   }
 
@@ -132,19 +199,53 @@ class OrchestratorApp {
   async start() {
     try {
       const port = config.server.port;
+      const httpsPort = config.server.httpsPort;
 
       // Vérifier la configuration
       if (config.server.env === 'production') {
         this.validateProductionConfig();
       }
 
-      // Démarrer le serveur
-      this.server = this.app.listen(port, () => {
-        logger.info(`🚀 TickTick Orchestrator démarré sur le port ${port}`);
-        logger.info(`🌐 Interface web: http://localhost:${port}`);
-        logger.info(`📋 API: http://localhost:${port}/api`);
-        logger.info(`🔧 Environnement: ${config.server.env}`);
+      // Serveur HTTP (redirection vers HTTPS)
+      const httpApp = express();
+      httpApp.use((req, res) => {
+        const httpsUrl = `https://${req.headers.host.replace(/:\d+$/, '')}:${httpsPort}${req.url}`;
+        res.redirect(301, httpsUrl);
       });
+
+      this.httpServer = http.createServer(httpApp);
+      this.httpServer.listen(port, () => {
+        logger.info(`🔄 Serveur HTTP démarré sur le port ${port} (redirection HTTPS)`);
+      });
+
+      // Serveur HTTPS
+      try {
+        const sslOptions = {
+          key: fs.readFileSync(path.join(__dirname, '..', config.server.sslKeyPath)),
+          cert: fs.readFileSync(path.join(__dirname, '..', config.server.sslCertPath))
+        };
+
+        this.httpsServer = https.createServer(sslOptions, this.app);
+        this.httpsServer.listen(httpsPort, () => {
+          logger.info(`🚀 TickTick Orchestrator démarré sur le port HTTPS ${httpsPort}`);
+          logger.info(`🌐 Interface web: https://localhost:${httpsPort}`);
+          logger.info(`📋 API: https://localhost:${httpsPort}/api`);
+          logger.info(`🔧 Environnement: ${config.server.env}`);
+          logger.info(`🔒 SSL activé avec certificat auto-signé`);
+        });
+
+        this.server = this.httpsServer;
+      } catch (sslError) {
+        logger.warn('Certificats SSL non trouvés, démarrage HTTP uniquement:', sslError.message);
+
+        // Fallback vers HTTP si SSL échoue
+        this.server = this.app.listen(port, () => {
+          logger.info(`🚀 TickTick Orchestrator démarré sur le port ${port} (HTTP uniquement)`);
+          logger.info(`🌐 Interface web: http://localhost:${port}`);
+          logger.info(`📋 API: http://localhost:${port}/api`);
+          logger.info(`🔧 Environnement: ${config.server.env}`);
+        });
+      }
 
       // Gestion propre de l'arrêt
       process.on('SIGTERM', () => this.gracefulShutdown('SIGTERM'));
@@ -184,18 +285,48 @@ class OrchestratorApp {
   async gracefulShutdown(signal) {
     logger.info(`Signal ${signal} reçu, arrêt en cours...`);
 
-    // Fermer le serveur HTTP
-    if (this.server) {
-      this.server.close(() => {
-        logger.info('Serveur HTTP fermé');
-      });
+    // Fermer les serveurs HTTP et HTTPS
+    const promises = [];
+
+    if (this.httpServer) {
+      promises.push(new Promise((resolve) => {
+        this.httpServer.close(() => {
+          logger.info('Serveur HTTP fermé');
+          resolve();
+        });
+      }));
     }
 
-    // Donner du temps pour terminer les requêtes en cours
-    setTimeout(() => {
-      logger.info('Arrêt forcé');
+    if (this.httpsServer) {
+      promises.push(new Promise((resolve) => {
+        this.httpsServer.close(() => {
+          logger.info('Serveur HTTPS fermé');
+          resolve();
+        });
+      }));
+    }
+
+    if (this.server && this.server !== this.httpsServer) {
+      promises.push(new Promise((resolve) => {
+        this.server.close(() => {
+          logger.info('Serveur principal fermé');
+          resolve();
+        });
+      }));
+    }
+
+    // Attendre que tous les serveurs se ferment
+    try {
+      await Promise.all(promises);
+      logger.info('Tous les serveurs fermés proprement');
       process.exit(0);
-    }, 10000);
+    } catch (error) {
+      logger.error('Erreur lors de la fermeture:', error);
+      setTimeout(() => {
+        logger.info('Arrêt forcé');
+        process.exit(0);
+      }, 5000);
+    }
   }
 
   // Méthodes utilitaires pour les tests

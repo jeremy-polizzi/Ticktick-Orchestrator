@@ -4,8 +4,11 @@ require('dotenv').config();
 const config = {
   // Server configuration
   server: {
-    port: process.env.PORT || 3000,
-    env: process.env.NODE_ENV || 'development'
+    port: parseInt(process.env.PORT) || 3000,
+    httpsPort: parseInt(process.env.HTTPS_PORT) || 3443,
+    env: process.env.NODE_ENV || 'development',
+    sslCertPath: process.env.SSL_CERT_PATH || './ssl/server.cert',
+    sslKeyPath: process.env.SSL_KEY_PATH || './ssl/server.key'
   },
 
   // Security

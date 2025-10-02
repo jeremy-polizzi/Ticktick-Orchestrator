@@ -1,0 +1,346 @@
+const express = require('express');
+const router = express.Router();
+const path = require('path');
+const fs = require('fs').promises;
+const config = require('../../config/config');
+const logger = require('../../utils/logger');
+
+const CONFIG_FILE = path.join(__dirname, '../../../.env');
+
+// Lire la configuration actuelle
+router.get('/current', async (req, res) => {
+  try {
+    const currentConfig = {
+      server: {
+        port: config.server.port,
+        env: config.server.env
+      },
+      ticktick: {
+        clientId: config.ticktick.clientId ? '***configured***' : null,
+        redirectUri: config.ticktick.redirectUri
+      },
+      google: {
+        clientId: config.google.clientId ? '***configured***' : null,
+        redirectUri: config.google.redirectUri
+      },
+      calendar: {
+        jeremyCalendarId: config.calendar.jeremyCalendarId,
+        businessCalendarId: config.calendar.businessCalendarId
+      },
+      scheduler: {
+        dailyTime: config.scheduler.dailyTime,
+        syncInterval: config.scheduler.syncInterval,
+        maxDailyTasks: config.scheduler.maxDailyTasks
+      },
+      database: {
+        path: config.database.path
+      }
+    };
+
+    res.json({
+      success: true,
+      config: currentConfig
+    });
+  } catch (error) {
+    logger.error('Erreur lecture configuration:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lecture configuration'
+    });
+  }
+});
+
+// Sauvegarder la configuration
+router.post('/save', async (req, res) => {
+  try {
+    const {
+      ticktickClientId,
+      ticktickClientSecret,
+      googleClientId,
+      googleClientSecret,
+      jeremyCalendarId,
+      businessCalendarId,
+      jwtSecret,
+      adminPassword
+    } = req.body;
+
+    // Lire le fichier .env actuel
+    let envContent = '';
+    try {
+      envContent = await fs.readFile(CONFIG_FILE, 'utf8');
+    } catch (error) {
+      logger.warn('.env file not found, creating new one');
+    }
+
+    // Fonction pour mettre à jour ou ajouter une variable
+    const updateEnvVar = (content, key, value) => {
+      const regex = new RegExp(`^${key}=.*$`, 'm');
+      if (regex.test(content)) {
+        return content.replace(regex, `${key}=${value}`);
+      } else {
+        return content + `\n${key}=${value}`;
+      }
+    };
+
+    // Mettre à jour les variables
+    if (ticktickClientId) {
+      envContent = updateEnvVar(envContent, 'TICKTICK_CLIENT_ID', ticktickClientId);
+    }
+    if (ticktickClientSecret) {
+      envContent = updateEnvVar(envContent, 'TICKTICK_CLIENT_SECRET', ticktickClientSecret);
+    }
+    if (googleClientId) {
+      envContent = updateEnvVar(envContent, 'GOOGLE_CLIENT_ID', googleClientId);
+    }
+    if (googleClientSecret) {
+      envContent = updateEnvVar(envContent, 'GOOGLE_CLIENT_SECRET', googleClientSecret);
+    }
+    if (jeremyCalendarId) {
+      envContent = updateEnvVar(envContent, 'JEREMY_CALENDAR_ID', jeremyCalendarId);
+    }
+    if (businessCalendarId) {
+      envContent = updateEnvVar(envContent, 'BUSINESS_CALENDAR_ID', businessCalendarId);
+    }
+    if (jwtSecret) {
+      envContent = updateEnvVar(envContent, 'JWT_SECRET', jwtSecret);
+    }
+    if (adminPassword) {
+      envContent = updateEnvVar(envContent, 'ADMIN_PASSWORD', adminPassword);
+    }
+
+    // Sauvegarder le fichier
+    await fs.writeFile(CONFIG_FILE, envContent.trim() + '\n');
+
+    logger.info('Configuration sauvegardée avec succès');
+
+    res.json({
+      success: true,
+      message: 'Configuration sauvegardée. Redémarrage recommandé pour appliquer les changements.'
+    });
+
+  } catch (error) {
+    logger.error('Erreur sauvegarde configuration:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la sauvegarde'
+    });
+  }
+});
+
+// Test de connexion TickTick
+router.post('/test/ticktick', async (req, res) => {
+  try {
+    const { clientId, clientSecret } = req.body;
+
+    if (!clientId || !clientSecret) {
+      return res.status(400).json({
+        success: false,
+        error: 'Client ID et Client Secret requis'
+      });
+    }
+
+    // Test basique de la configuration TickTick
+    const TickTickAPI = require('../../api/ticktick-api');
+    const ticktick = new TickTickAPI();
+
+    // Générer l'URL d'autorisation pour vérifier la config
+    const authUrl = ticktick.getAuthorizationUrl();
+
+    res.json({
+      success: true,
+      message: 'Configuration TickTick valide',
+      authUrl: authUrl
+    });
+
+  } catch (error) {
+    logger.error('Erreur test TickTick:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors du test TickTick: ' + error.message
+    });
+  }
+});
+
+// Test de connexion Google Calendar
+router.post('/test/google', async (req, res) => {
+  try {
+    const { clientId, clientSecret } = req.body;
+
+    if (!clientId || !clientSecret) {
+      return res.status(400).json({
+        success: false,
+        error: 'Client ID et Client Secret requis'
+      });
+    }
+
+    // Test basique de la configuration Google
+    const GoogleCalendarAPI = require('../../api/google-calendar-api');
+    const google = new GoogleCalendarAPI();
+
+    // Générer l'URL d'autorisation pour vérifier la config
+    const authUrl = google.getAuthorizationUrl();
+
+    res.json({
+      success: true,
+      message: 'Configuration Google Calendar valide',
+      authUrl: authUrl
+    });
+
+  } catch (error) {
+    logger.error('Erreur test Google:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors du test Google Calendar: ' + error.message
+    });
+  }
+});
+
+// Autorisation TickTick
+router.get('/auth/ticktick', async (req, res) => {
+  try {
+    const TickTickAPI = require('../../api/ticktick-api');
+    const ticktick = new TickTickAPI();
+
+    const authUrl = ticktick.getAuthorizationUrl();
+    res.redirect(authUrl);
+
+  } catch (error) {
+    logger.error('Erreur autorisation TickTick:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de l\'autorisation TickTick'
+    });
+  }
+});
+
+// Callback TickTick
+router.get('/auth/ticktick/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        error: 'Code d\'autorisation manquant'
+      });
+    }
+
+    const TickTickAPI = require('../../api/ticktick-api');
+    const ticktick = new TickTickAPI();
+
+    // Échanger le code contre un token
+    const tokens = await ticktick.exchangeCodeForTokens(code);
+
+    // Sauvegarder les tokens dans la base de données
+    await ticktick.saveTokens(tokens);
+
+    logger.info('Autorisation TickTick réussie');
+
+    // Rediriger vers l'interface avec succès
+    res.redirect('/?config=success&service=ticktick');
+
+  } catch (error) {
+    logger.error('Erreur callback TickTick:', error);
+    res.redirect('/?config=error&service=ticktick&error=' + encodeURIComponent(error.message));
+  }
+});
+
+// Autorisation Google Calendar
+router.get('/auth/google', async (req, res) => {
+  try {
+    const GoogleCalendarAPI = require('../../api/google-calendar-api');
+    const google = new GoogleCalendarAPI();
+
+    const authUrl = google.getAuthorizationUrl();
+    res.redirect(authUrl);
+
+  } catch (error) {
+    logger.error('Erreur autorisation Google:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de l\'autorisation Google'
+    });
+  }
+});
+
+// Callback Google Calendar
+router.get('/auth/google/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        error: 'Code d\'autorisation manquant'
+      });
+    }
+
+    const GoogleCalendarAPI = require('../../api/google-calendar-api');
+    const google = new GoogleCalendarAPI();
+
+    // Échanger le code contre un token
+    const tokens = await google.exchangeCodeForTokens(code);
+
+    // Sauvegarder les tokens
+    await google.saveTokens(tokens);
+
+    logger.info('Autorisation Google Calendar réussie');
+
+    // Rediriger vers l'interface avec succès
+    res.redirect('/?config=success&service=google');
+
+  } catch (error) {
+    logger.error('Erreur callback Google:', error);
+    res.redirect('/?config=error&service=google&error=' + encodeURIComponent(error.message));
+  }
+});
+
+// Status des connexions
+router.get('/status', async (req, res) => {
+  try {
+    const status = {
+      ticktick: {
+        configured: !!config.ticktick.clientId,
+        connected: false
+      },
+      google: {
+        configured: !!config.google.clientId,
+        connected: false
+      }
+    };
+
+    // Vérifier les tokens TickTick
+    try {
+      const TickTickAPI = require('../../api/ticktick-api');
+      const ticktick = new TickTickAPI();
+      const hasTokens = await ticktick.hasValidTokens();
+      status.ticktick.connected = hasTokens;
+    } catch (error) {
+      logger.debug('TickTick non connecté:', error.message);
+    }
+
+    // Vérifier les tokens Google
+    try {
+      const GoogleCalendarAPI = require('../../api/google-calendar-api');
+      const google = new GoogleCalendarAPI();
+      const hasTokens = await google.hasValidTokens();
+      status.google.connected = hasTokens;
+    } catch (error) {
+      logger.debug('Google non connecté:', error.message);
+    }
+
+    res.json({
+      success: true,
+      status: status
+    });
+
+  } catch (error) {
+    logger.error('Erreur status:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la vérification du status'
+    });
+  }
+});
+
+module.exports = router;
