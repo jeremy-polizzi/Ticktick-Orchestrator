@@ -41,14 +41,10 @@ function generateAccessToken(userData) {
 // Vérification du mot de passe admin
 async function verifyAdminPassword(password) {
   try {
-    // En développement, comparaison simple
-    if (config.server.env === 'development') {
-      return password === config.security.adminPassword;
-    }
-
-    // En production, utiliser bcrypt
-    const hashedPassword = await bcrypt.hash(config.security.adminPassword, 10);
-    return await bcrypt.compare(password, hashedPassword);
+    // Comparaison simple et directe pour tous les environnements
+    const result = password === config.security.adminPassword;
+    logger.debug(`Vérification mot de passe: ${result ? 'succès' : 'échec'}`);
+    return result;
   } catch (error) {
     logger.error('Erreur lors de la vérification du mot de passe:', error.message);
     return false;
