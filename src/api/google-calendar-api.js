@@ -176,7 +176,7 @@ class GoogleCalendarAPI {
   }
 
   // Analyse des créneaux disponibles
-  async getAvailableSlots(calendarIds, date, duration = 60) {
+  async getAvailableSlots(calendarIds, date, duration = 60, options = {}) {
     try {
       const startOfDay = new Date(date);
       startOfDay.setHours(0, 0, 0, 0);
@@ -184,12 +184,28 @@ class GoogleCalendarAPI {
       const endOfDay = new Date(date);
       endOfDay.setHours(23, 59, 59, 999);
 
+      // Options par défaut
+      const {
+        bufferMinutes = 15, // Espacement minimum entre événements
+        excludeMorning = true, // Ne pas placer le matin
+        morningEndHour = 12 // Fin du matin
+      } = options;
+
       // Récupérer tous les événements des calendriers
       const allEvents = [];
       for (const calendarId of calendarIds) {
         const events = await this.getEvents(calendarId, startOfDay, endOfDay);
         allEvents.push(...events);
       }
+
+      // Détecter les événements de sport
+      const sportKeywords = ['sport', 'gym', 'musculation', 'fitness', 'training', 'entraînement', 'yoga', 'running', 'course'];
+      const hasSportToday = allEvents.some(event => {
+        const summary = (event.summary || '').toLowerCase();
+        return sportKeywords.some(keyword => summary.includes(keyword));
+      });
+
+      logger.info(`Jour ${date.toDateString()}: Sport détecté = ${hasSportToday}`);
 
       // Trier par heure de début
       allEvents.sort((a, b) => {
@@ -200,7 +216,7 @@ class GoogleCalendarAPI {
 
       // Identifier les créneaux libres
       const workingHours = {
-        start: 8, // 8h
+        start: hasSportToday && excludeMorning ? morningEndHour : 8, // Pas le matin si sport
         end: 20   // 20h
       };
 
@@ -215,21 +231,28 @@ class GoogleCalendarAPI {
         const eventStart = new Date(event.start.dateTime || event.start.date);
         const eventEnd = new Date(event.end.dateTime || event.end.date);
 
-        // Si il y a un gap avant cet événement
-        if (eventStart > currentTime) {
-          const slotDuration = (eventStart - currentTime) / (1000 * 60); // en minutes
+        // Ajouter un buffer après l'événement précédent
+        const bufferedCurrentTime = new Date(currentTime.getTime() + bufferMinutes * 60 * 1000);
+
+        // Si il y a un gap avant cet événement (avec buffer)
+        const bufferedEventStart = new Date(eventStart.getTime() - bufferMinutes * 60 * 1000);
+
+        if (bufferedEventStart > bufferedCurrentTime) {
+          const slotDuration = (bufferedEventStart - bufferedCurrentTime) / (1000 * 60); // en minutes
           if (slotDuration >= duration) {
             slots.push({
-              start: new Date(currentTime),
-              end: new Date(eventStart),
-              duration: slotDuration
+              start: new Date(bufferedCurrentTime),
+              end: new Date(bufferedEventStart),
+              duration: slotDuration,
+              hasSport: hasSportToday
             });
           }
         }
 
-        // Avancer le curseur après cet événement
-        if (eventEnd > currentTime) {
-          currentTime = new Date(eventEnd);
+        // Avancer le curseur après cet événement (avec buffer)
+        const bufferedEventEnd = new Date(eventEnd.getTime() + bufferMinutes * 60 * 1000);
+        if (bufferedEventEnd > currentTime) {
+          currentTime = new Date(bufferedEventEnd);
         }
       }
 
@@ -240,12 +263,13 @@ class GoogleCalendarAPI {
           slots.push({
             start: new Date(currentTime),
             end: new Date(endTime),
-            duration: finalSlotDuration
+            duration: finalSlotDuration,
+            hasSport: hasSportToday
           });
         }
       }
 
-      logger.info(`${slots.length} créneaux disponibles trouvés pour le ${date.toDateString()}`);
+      logger.info(`${slots.length} créneaux disponibles trouvés pour le ${date.toDateString()} (Sport: ${hasSportToday}, Buffer: ${bufferMinutes}min)`);
       return slots;
     } catch (error) {
       logger.error('Erreur lors de l\'analyse des créneaux disponibles:', error.message);

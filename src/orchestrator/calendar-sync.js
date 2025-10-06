@@ -94,8 +94,8 @@ class CalendarSync {
         return;
       }
 
-      // Convertir la tâche en événement
-      const eventData = this.convertTaskToEvent(task);
+      // Convertir la tâche en événement (maintenant asynchrone)
+      const eventData = await this.convertTaskToEvent(task);
 
       if (existingEventId) {
         // Mettre à jour l'événement existant
@@ -183,7 +183,7 @@ class CalendarSync {
     return true;
   }
 
-  convertTaskToEvent(task) {
+  async convertTaskToEvent(task) {
     const eventData = {
       summary: this.formatEventTitle(task),
       description: this.formatEventDescription(task),
@@ -199,11 +199,25 @@ class CalendarSync {
     const dueDate = new Date(task.dueDate);
 
     if (task.allDay !== false && !task.startDate) {
-      // Événement sur toute la journée (par défaut selon spécifications)
-      eventData.start.date = dueDate.toISOString().split('T')[0];
-      eventData.end.date = dueDate.toISOString().split('T')[0];
+      // Tenter de placer la tâche dans un créneau disponible
+      const scheduledSlot = await this.scheduleTaskInSlot(task, dueDate);
+
+      if (scheduledSlot) {
+        // Placer dans un créneau spécifique avec espacement
+        eventData.start.dateTime = scheduledSlot.start.toISOString();
+        eventData.end.dateTime = scheduledSlot.end.toISOString();
+        eventData.start.timeZone = config.scheduler.timezone;
+        eventData.end.timeZone = config.scheduler.timezone;
+
+        logger.info(`Tâche "${task.title}" planifiée dans créneau ${scheduledSlot.start.toLocaleTimeString('fr-FR')} - ${scheduledSlot.end.toLocaleTimeString('fr-FR')}`);
+      } else {
+        // Fallback: événement sur toute la journée si aucun créneau disponible
+        eventData.start.date = dueDate.toISOString().split('T')[0];
+        eventData.end.date = dueDate.toISOString().split('T')[0];
+        logger.warn(`Aucun créneau disponible pour "${task.title}", placée en journée entière`);
+      }
     } else {
-      // Événement avec heure spécifique
+      // Événement avec heure spécifique (déjà définie par l'utilisateur)
       let startTime = dueDate;
       let endTime = new Date(dueDate);
 
@@ -233,6 +247,98 @@ class CalendarSync {
     };
 
     return eventData;
+  }
+
+  async scheduleTaskInSlot(task, targetDate) {
+    try {
+      const calendarIds = [config.calendars.jeremy, config.calendars.business];
+
+      // Estimer la durée de la tâche
+      const estimatedDuration = this.estimateTaskDuration(task);
+
+      // Récupérer les créneaux disponibles avec buffer de 15 minutes
+      const availableSlots = await this.googleCalendar.getAvailableSlots(
+        calendarIds,
+        targetDate,
+        estimatedDuration,
+        {
+          bufferMinutes: 15,
+          excludeMorning: true,
+          morningEndHour: 12
+        }
+      );
+
+      if (availableSlots.length === 0) {
+        logger.warn(`Aucun créneau disponible pour la tâche "${task.title}" le ${targetDate.toDateString()}`);
+        return null;
+      }
+
+      // Choisir le meilleur créneau selon la priorité de la tâche
+      const bestSlot = this.selectBestSlot(task, availableSlots, estimatedDuration);
+
+      if (!bestSlot) {
+        return null;
+      }
+
+      // Créer les dates de début/fin dans le créneau
+      const start = new Date(bestSlot.start);
+      const end = new Date(start.getTime() + estimatedDuration * 60 * 1000);
+
+      return { start, end };
+    } catch (error) {
+      logger.error(`Erreur lors de la planification de la tâche ${task.id}:`, error.message);
+      return null;
+    }
+  }
+
+  estimateTaskDuration(task) {
+    // Durée estimée en minutes
+    if (task.timeEstimate) {
+      return task.timeEstimate;
+    }
+
+    const text = `${task.title} ${task.content || ''}`.toLowerCase();
+    const wordCount = text.split(' ').length;
+
+    // Estimation basée sur le contenu
+    if (wordCount > 50 || text.includes('développement') || text.includes('création')) {
+      return 120; // 2 heures
+    } else if (wordCount > 20 || text.includes('formation') || text.includes('rédaction')) {
+      return 90; // 1.5 heure
+    } else if (text.includes('appel') || text.includes('email')) {
+      return 30; // 30 minutes
+    } else {
+      return 60; // 1 heure par défaut
+    }
+  }
+
+  selectBestSlot(task, slots, duration) {
+    // Priorité aux tâches urgentes : prendre le premier créneau disponible
+    if (task.tags && task.tags.includes('urgent')) {
+      return slots[0];
+    }
+
+    // Pour les tâches créatives/développement : préférer l'après-midi
+    const text = `${task.title} ${task.content || ''}`.toLowerCase();
+    const isCreative = ['développement', 'création', 'design', 'rédaction'].some(kw => text.includes(kw));
+
+    if (isCreative) {
+      // Chercher un créneau après 14h
+      const afternoonSlot = slots.find(slot => {
+        const slotHour = slot.start.getHours();
+        return slotHour >= 14 && slot.duration >= duration;
+      });
+      if (afternoonSlot) return afternoonSlot;
+    }
+
+    // Prendre le créneau le plus long disponible pour les tâches importantes
+    if (task.priority && task.priority >= 3) {
+      const sortedByDuration = [...slots].sort((a, b) => b.duration - a.duration);
+      return sortedByDuration[0];
+    }
+
+    // Par défaut: premier créneau disponible
+    return slots[0];
   }
 
   formatEventTitle(task) {
