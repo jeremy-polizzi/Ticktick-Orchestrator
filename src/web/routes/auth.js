@@ -133,11 +133,8 @@ router.get('/ticktick/start', async (req, res) => {
 
     logger.info('Redirection vers l\'authentification TickTick');
 
-    res.json({
-      success: true,
-      authUrl,
-      message: 'Redirection vers TickTick pour authentification'
-    });
+    // REDIRIGER directement au lieu de renvoyer du JSON
+    res.redirect(authUrl);
   } catch (error) {
     logger.error('Erreur lors du démarrage de l\'auth TickTick:', error.message);
     res.status(500).json({
@@ -166,8 +163,17 @@ router.get('/ticktick/callback', async (req, res) => {
 
     logger.info('Authentification TickTick réussie');
 
-    // Rediriger vers l'interface avec succès
-    res.redirect('/?ticktick_auth=success');
+    // CRITIQUE: Forcer le rechargement des tokens dans le TaskManager global
+    // Le TaskManager a été initialisé AVANT l'OAuth, il doit recharger les nouveaux tokens
+    const TaskManager = require('../../orchestrator/task-manager');
+    const taskManager = require('../../web/routes/tasks').taskManager;
+    if (taskManager && taskManager.ticktick) {
+      await taskManager.ticktick.loadTokens();
+      logger.info('Tokens TickTick rechargés dans le TaskManager après OAuth');
+    }
+
+    // Rediriger vers le dashboard avec succès (préserve la session admin)
+    res.redirect('/dashboard?ticktick_auth=success');
 
   } catch (error) {
     logger.error('Erreur lors du callback TickTick:', error.message);
@@ -203,11 +209,8 @@ router.get('/google/start', async (req, res) => {
 
     logger.info('Redirection vers l\'authentification Google');
 
-    res.json({
-      success: true,
-      authUrl,
-      message: 'Redirection vers Google pour authentification'
-    });
+    // REDIRIGER directement au lieu de renvoyer du JSON
+    res.redirect(authUrl);
   } catch (error) {
     logger.error('Erreur lors du démarrage de l\'auth Google:', error.message);
     res.status(500).json({
@@ -236,8 +239,8 @@ router.get('/google/callback', async (req, res) => {
 
     logger.info('Authentification Google réussie');
 
-    // Rediriger vers l'interface avec succès
-    res.redirect('/?google_auth=success');
+    // Rediriger vers le dashboard avec succès (préserve la session admin)
+    res.redirect('/dashboard?google_auth=success');
 
   } catch (error) {
     logger.error('Erreur lors du callback Google:', error.message);

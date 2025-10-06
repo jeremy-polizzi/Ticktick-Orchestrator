@@ -27,7 +27,7 @@ class GoogleCalendarAPI {
 
   async exchangeCodeForToken(code) {
     try {
-      const { tokens } = await this.oauth2Client.getAccessToken(code);
+      const { tokens } = await this.oauth2Client.getToken(code);
       this.oauth2Client.setCredentials(tokens);
 
       // Sauvegarder les tokens
@@ -36,7 +36,12 @@ class GoogleCalendarAPI {
       logger.info('Google Calendar tokens obtenus avec succès');
       return tokens;
     } catch (error) {
-      logger.error('Erreur lors de l\'échange du code Google:', error.message);
+      logger.error('Erreur lors de l\'échange du code Google:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        code: error.code
+      });
       throw error;
     }
   }

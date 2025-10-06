@@ -23,8 +23,9 @@ const config = {
   ticktick: {
     clientId: process.env.TICKTICK_CLIENT_ID,
     clientSecret: process.env.TICKTICK_CLIENT_SECRET,
-    redirectUri: process.env.TICKTICK_REDIRECT_URI || 'http://localhost:3000/auth/ticktick/callback',
+    redirectUri: process.env.TICKTICK_REDIRECT_URI, // Sera auto-détecté si vide
     baseUrl: 'https://api.ticktick.com',
+    authBaseUrl: 'https://ticktick.com', // OAuth endpoints sur ticktick.com, pas api.ticktick.com
     scope: 'tasks:write tasks:read'
   },
 
@@ -32,11 +33,41 @@ const config = {
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    redirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/auth/google/callback',
+    redirectUri: process.env.GOOGLE_REDIRECT_URI, // Sera auto-détecté si vide
     scope: [
       'https://www.googleapis.com/auth/calendar',
       'https://www.googleapis.com/auth/calendar.events'
     ]
+  },
+
+  // Détection automatique du domaine/IP pour les redirect URIs
+  getBaseUrl: function(req) {
+    // Si les redirect URIs sont définis dans .env, les utiliser
+    if (this.ticktick.redirectUri && this.google.redirectUri) {
+      return null; // Pas besoin de générer dynamiquement
+    }
+
+    // Sinon, détecter automatiquement depuis la requête
+    const protocol = req.protocol || (req.headers['x-forwarded-proto'] || 'http');
+    const host = req.get('host') || req.headers['x-forwarded-host'] || 'localhost:3000';
+
+    return `${protocol}://${host}`;
+  },
+
+  getTickTickRedirectUri: function(req) {
+    if (this.ticktick.redirectUri) {
+      return this.ticktick.redirectUri;
+    }
+    const baseUrl = this.getBaseUrl(req);
+    return `${baseUrl}/auth/ticktick/callback`;
+  },
+
+  getGoogleRedirectUri: function(req) {
+    if (this.google.redirectUri) {
+      return this.google.redirectUri;
+    }
+    const baseUrl = this.getBaseUrl(req);
+    return `${baseUrl}/auth/google/callback`;
   },
 
   // Database

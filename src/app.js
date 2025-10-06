@@ -29,12 +29,15 @@ class OrchestratorApp {
   }
 
   setupMiddleware() {
+    // Trust proxy (derrière Nginx)
+    this.app.set('trust proxy', 1);
+
     // Sécurité
     this.app.use(helmet({
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "data:"],
           scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
           scriptSrcAttr: ["'unsafe-inline'"], // Permettre les handlers onclick
           imgSrc: ["'self'", "data:", "https:"],
@@ -222,53 +225,21 @@ class OrchestratorApp {
   async start() {
     try {
       const port = config.server.port;
-      const httpsPort = config.server.httpsPort;
 
       // Vérifier la configuration
       if (config.server.env === 'production') {
         this.validateProductionConfig();
       }
 
-      // Serveur HTTP (redirection vers HTTPS)
-      const httpApp = express();
-      httpApp.use((req, res) => {
-        const httpsUrl = `https://${req.headers.host.replace(/:\d+$/, '')}:${httpsPort}${req.url}`;
-        res.redirect(301, httpsUrl);
+      // Serveur HTTP uniquement (Nginx gère le SSL en reverse proxy)
+      this.server = this.app.listen(port, '127.0.0.1', () => {
+        logger.info(`🚀 TickTick Orchestrator démarré sur le port ${port}`);
+        logger.info(`🌐 Interface web: http://127.0.0.1:${port}`);
+        logger.info(`📋 API: http://127.0.0.1:${port}/api`);
+        logger.info(`🔧 Environnement: ${config.server.env}`);
+        logger.info(`🔒 SSL géré par Nginx (reverse proxy)`);
+        logger.info(`🌍 Accès public: https://vps.plus-de-clients.fr`);
       });
-
-      this.httpServer = http.createServer(httpApp);
-      this.httpServer.listen(port, () => {
-        logger.info(`🔄 Serveur HTTP démarré sur le port ${port} (redirection HTTPS)`);
-      });
-
-      // Serveur HTTPS
-      try {
-        const sslOptions = {
-          key: fs.readFileSync(path.join(__dirname, '..', config.server.sslKeyPath)),
-          cert: fs.readFileSync(path.join(__dirname, '..', config.server.sslCertPath))
-        };
-
-        this.httpsServer = https.createServer(sslOptions, this.app);
-        this.httpsServer.listen(httpsPort, () => {
-          logger.info(`🚀 TickTick Orchestrator démarré sur le port HTTPS ${httpsPort}`);
-          logger.info(`🌐 Interface web: https://localhost:${httpsPort}`);
-          logger.info(`📋 API: https://localhost:${httpsPort}/api`);
-          logger.info(`🔧 Environnement: ${config.server.env}`);
-          logger.info(`🔒 SSL activé avec certificat auto-signé`);
-        });
-
-        this.server = this.httpsServer;
-      } catch (sslError) {
-        logger.warn('Certificats SSL non trouvés, démarrage HTTP uniquement:', sslError.message);
-
-        // Fallback vers HTTP si SSL échoue
-        this.server = this.app.listen(port, () => {
-          logger.info(`🚀 TickTick Orchestrator démarré sur le port ${port} (HTTP uniquement)`);
-          logger.info(`🌐 Interface web: http://localhost:${port}`);
-          logger.info(`📋 API: http://localhost:${port}/api`);
-          logger.info(`🔧 Environnement: ${config.server.env}`);
-        });
-      }
 
       // Gestion propre de l'arrêt
       process.on('SIGTERM', () => this.gracefulShutdown('SIGTERM'));
@@ -308,47 +279,24 @@ class OrchestratorApp {
   async gracefulShutdown(signal) {
     logger.info(`Signal ${signal} reçu, arrêt en cours...`);
 
-    // Fermer les serveurs HTTP et HTTPS
-    const promises = [];
-
-    if (this.httpServer) {
-      promises.push(new Promise((resolve) => {
-        this.httpServer.close(() => {
-          logger.info('Serveur HTTP fermé');
-          resolve();
+    if (this.server) {
+      try {
+        await new Promise((resolve) => {
+          this.server.close(() => {
+            logger.info('Serveur HTTP fermé proprement');
+            resolve();
+          });
         });
-      }));
-    }
-
-    if (this.httpsServer) {
-      promises.push(new Promise((resolve) => {
-        this.httpsServer.close(() => {
-          logger.info('Serveur HTTPS fermé');
-          resolve();
-        });
-      }));
-    }
-
-    if (this.server && this.server !== this.httpsServer) {
-      promises.push(new Promise((resolve) => {
-        this.server.close(() => {
-          logger.info('Serveur principal fermé');
-          resolve();
-        });
-      }));
-    }
-
-    // Attendre que tous les serveurs se ferment
-    try {
-      await Promise.all(promises);
-      logger.info('Tous les serveurs fermés proprement');
-      process.exit(0);
-    } catch (error) {
-      logger.error('Erreur lors de la fermeture:', error);
-      setTimeout(() => {
-        logger.info('Arrêt forcé');
         process.exit(0);
-      }, 5000);
+      } catch (error) {
+        logger.error('Erreur lors de la fermeture:', error);
+        setTimeout(() => {
+          logger.info('Arrêt forcé');
+          process.exit(0);
+        }, 5000);
+      }
+    } else {
+      process.exit(0);
     }
   }
 

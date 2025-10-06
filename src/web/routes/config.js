@@ -16,12 +16,14 @@ router.get('/current', async (req, res) => {
         env: config.server.env
       },
       ticktick: {
-        clientId: config.ticktick.clientId ? '***configured***' : null,
-        redirectUri: config.ticktick.redirectUri
+        clientId: config.ticktick.clientId || null,
+        clientIdMasked: config.ticktick.clientId ? '***configured***' : null,
+        redirectUri: config.getTickTickRedirectUri(req)
       },
       google: {
-        clientId: config.google.clientId ? '***configured***' : null,
-        redirectUri: config.google.redirectUri
+        clientId: config.google.clientId || null,
+        clientIdMasked: config.google.clientId ? '***configured***' : null,
+        redirectUri: config.getGoogleRedirectUri(req)
       },
       calendar: {
         jeremyCalendarId: config.calendars.jeremy,
@@ -82,17 +84,17 @@ router.post('/save', async (req, res) => {
       }
     };
 
-    // Mettre à jour les variables
+    // Mettre à jour les variables (conserver les secrets existants si champs vides)
     if (ticktickClientId) {
       envContent = updateEnvVar(envContent, 'TICKTICK_CLIENT_ID', ticktickClientId);
     }
-    if (ticktickClientSecret) {
+    if (ticktickClientSecret && ticktickClientSecret.trim() !== '') {
       envContent = updateEnvVar(envContent, 'TICKTICK_CLIENT_SECRET', ticktickClientSecret);
     }
     if (googleClientId) {
       envContent = updateEnvVar(envContent, 'GOOGLE_CLIENT_ID', googleClientId);
     }
-    if (googleClientSecret) {
+    if (googleClientSecret && googleClientSecret.trim() !== '') {
       envContent = updateEnvVar(envContent, 'GOOGLE_CLIENT_SECRET', googleClientSecret);
     }
     if (jeremyCalendarId) {
@@ -113,10 +115,34 @@ router.post('/save', async (req, res) => {
 
     logger.info('Configuration sauvegardée avec succès');
 
+    // Recharger immédiatement la configuration en mémoire
+    delete require.cache[require.resolve('../../config/config')];
+    const newConfig = require('../../config/config');
+
+    // Mettre à jour l'objet config actif
+    Object.assign(config, newConfig);
+
+    logger.info('Configuration rechargée en mémoire');
+
+    // Notification de redémarrage automatique
+    logger.info('⚡ Redémarrage automatique du serveur pour appliquer les changements OAuth...');
+
     res.json({
       success: true,
-      message: 'Configuration sauvegardée. Redémarrage recommandé pour appliquer les changements.'
+      message: 'Configuration sauvegardée. Redémarrage automatique en cours...',
+      willRestart: true
     });
+
+    // Redémarrer après 2 secondes pour laisser le temps à la réponse
+    setTimeout(() => {
+      const { exec } = require('child_process');
+      const restartScript = path.join(__dirname, '../../../restart.sh');
+      exec(restartScript, (error) => {
+        if (error) {
+          logger.error('Erreur redémarrage:', error);
+        }
+      });
+    }, 2000);
 
   } catch (error) {
     logger.error('Erreur sauvegarde configuration:', error);
@@ -220,37 +246,8 @@ router.get('/auth/ticktick', async (req, res) => {
   }
 });
 
-// Callback TickTick
-router.get('/auth/ticktick/callback', async (req, res) => {
-  try {
-    const { code } = req.query;
-
-    if (!code) {
-      return res.status(400).json({
-        success: false,
-        error: 'Code d\'autorisation manquant'
-      });
-    }
-
-    const TickTickAPI = require('../../api/ticktick-api');
-    const ticktick = new TickTickAPI();
-
-    // Échanger le code contre un token
-    const tokens = await ticktick.exchangeCodeForTokens(code);
-
-    // Sauvegarder les tokens dans la base de données
-    await ticktick.saveTokens(tokens);
-
-    logger.info('Autorisation TickTick réussie');
-
-    // Rediriger vers l'interface avec succès
-    res.redirect('/?config=success&service=ticktick');
-
-  } catch (error) {
-    logger.error('Erreur callback TickTick:', error);
-    res.redirect('/?config=error&service=ticktick&error=' + encodeURIComponent(error.message));
-  }
-});
+// ⚠️ CALLBACK SUPPRIMÉ - Utilisez /auth/ticktick/callback dans auth.js
+// Ce fichier (config.js) ne gère QUE la configuration, pas l'OAuth
 
 // Autorisation Google Calendar
 router.get('/auth/google', async (req, res) => {

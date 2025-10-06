@@ -532,4 +532,6 @@ router.get('/stats/overview', async (req, res) => {
   }
 });
 
+// Exporter le router et le taskManager pour permettre le rechargement des tokens après OAuth
 module.exports = router;
+module.exports.taskManager = taskManager;

@@ -51,40 +51,152 @@ class TickTickAPI {
       redirect_uri: config.ticktick.redirectUri
     });
 
-    return `${this.baseUrl}/oauth/authorize?${params}`;
+    // OAuth endpoints sont sur ticktick.com, pas api.ticktick.com
+    const authBaseUrl = config.ticktick.authBaseUrl || 'https://ticktick.com';
+    return `${authBaseUrl}/oauth/authorize?${params}`;
   }
 
   async exchangeCodeForToken(code) {
     try {
-      const response = await axios.post(`${this.baseUrl}/oauth/token`, {
-        client_id: config.ticktick.clientId,
-        client_secret: config.ticktick.clientSecret,
-        code: code,
-        grant_type: 'authorization_code',
-        redirect_uri: config.ticktick.redirectUri
-      });
+      logger.info(`Échange du code OAuth TickTick: ${code?.substring(0, 10)}...`);
 
-      this.accessToken = response.data.access_token;
-      this.refreshToken = response.data.refresh_token;
+      const authBaseUrl = config.ticktick.authBaseUrl || 'https://ticktick.com';
 
-      // Sauvegarder les tokens
-      await this.saveTokens();
+      // TEST 1: JSON body avec client_id/secret (méthode rollout.com)
+      try {
+        logger.info('Test méthode 1: JSON body');
+        const response1 = await axios.post(`${authBaseUrl}/oauth/token`, {
+          client_id: config.ticktick.clientId,
+          client_secret: config.ticktick.clientSecret,
+          code: code,
+          grant_type: 'authorization_code',
+          redirect_uri: config.ticktick.redirectUri,
+          scope: 'tasks:read tasks:write'
+        }, {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
 
-      logger.info('TickTick tokens obtenus avec succès');
-      return response.data;
+        this.accessToken = response1.data.access_token;
+        this.refreshToken = response1.data.refresh_token;
+        await this.saveTokens();
+        logger.info('✅ TickTick tokens obtenus avec succès (méthode JSON)');
+        return response1.data;
+      } catch (error1) {
+        logger.error('❌ Méthode 1 (JSON) échouée:', {
+          status: error1.response?.status,
+          statusText: error1.response?.statusText,
+          data: error1.response?.data,
+          headers: error1.response?.headers
+        });
+      }
+
+      // TEST 2: QUERY PARAMS avec HTTP Basic Auth (méthode GitHub Gist qui fonctionne)
+      try {
+        logger.info('Test méthode 2: Query params + Basic Auth (comme GitHub Gist)');
+        const basicAuth = Buffer.from(`${config.ticktick.clientId}:${config.ticktick.clientSecret}`).toString('base64');
+
+        const response2 = await axios.post(`${authBaseUrl}/oauth/token`, null, {
+          params: {
+            code: code,
+            grant_type: 'authorization_code',
+            scope: 'tasks:read tasks:write',
+            redirect_uri: config.ticktick.redirectUri,
+            state: 'state'
+          },
+          headers: {
+            'Authorization': `Basic ${basicAuth}`
+          }
+        });
+
+        this.accessToken = response2.data.access_token;
+        this.refreshToken = response2.data.refresh_token;
+        await this.saveTokens();
+        logger.info('✅ TickTick tokens obtenus avec succès (méthode Basic Auth)');
+        return response2.data;
+      } catch (error2) {
+        logger.error('❌ Méthode 2 (Basic Auth) échouée:', {
+          status: error2.response?.status,
+          statusText: error2.response?.statusText,
+          data: error2.response?.data,
+          headers: error2.response?.headers
+        });
+      }
+
+      // TEST 3: Form-urlencoded avec client_id/secret dans body
+      try {
+        logger.info('Test méthode 3: Form-urlencoded complet');
+        const formData = new URLSearchParams({
+          client_id: config.ticktick.clientId,
+          client_secret: config.ticktick.clientSecret,
+          code: code,
+          grant_type: 'authorization_code',
+          scope: 'tasks:read tasks:write',
+          redirect_uri: config.ticktick.redirectUri
+        }).toString();
+
+        const response3 = await axios.post(`${authBaseUrl}/oauth/token`, formData, {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        });
+
+        this.accessToken = response3.data.access_token;
+        this.refreshToken = response3.data.refresh_token;
+        await this.saveTokens();
+        logger.info('✅ TickTick tokens obtenus avec succès (méthode form complete)');
+        return response3.data;
+      } catch (error3) {
+        logger.error('❌ Méthode 3 (Form complete) échouée:', {
+          status: error3.response?.status,
+          statusText: error3.response?.statusText,
+          data: error3.response?.data,
+          headers: error3.response?.headers
+        });
+        logger.error('🚨 TOUTES les méthodes ont échoué - VOS CREDENTIALS TICKTICK SONT PROBABLEMENT INVALIDES');
+        logger.error('Vérifiez dans la console TickTick Developer:', {
+          clientId: config.ticktick.clientId,
+          redirectUri: config.ticktick.redirectUri,
+          message: 'Le client_secret a peut-être été régénéré'
+        });
+        throw new Error('Impossible d\'échanger le code OAuth TickTick - Credentials invalides ?');
+      }
+
     } catch (error) {
-      logger.error('Erreur lors de l\'échange du code TickTick:', error.message);
+      logger.error('Erreur lors de l\'échange du code TickTick:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        config: {
+          baseUrl: this.baseUrl,
+          clientId: config.ticktick.clientId?.substring(0, 5) + '...',
+          redirectUri: config.ticktick.redirectUri
+        }
+      });
       throw error;
     }
   }
 
   async refreshAccessToken() {
     try {
-      const response = await axios.post(`${this.baseUrl}/oauth/token`, {
-        client_id: config.ticktick.clientId,
-        client_secret: config.ticktick.clientSecret,
-        refresh_token: this.refreshToken,
-        grant_type: 'refresh_token'
+      // OAuth endpoints sont sur ticktick.com, pas api.ticktick.com
+      const authBaseUrl = config.ticktick.authBaseUrl || 'https://ticktick.com';
+
+      // TickTick requiert HTTP Basic Auth avec client_id:client_secret en header
+      const formData = [
+        `refresh_token=${encodeURIComponent(this.refreshToken)}`,
+        `grant_type=refresh_token`
+      ].join('&');
+
+      // Créer le header HTTP Basic Auth
+      const basicAuth = Buffer.from(`${config.ticktick.clientId}:${config.ticktick.clientSecret}`).toString('base64');
+
+      const response = await axios.post(`${authBaseUrl}/oauth/token`, formData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${basicAuth}`
+        }
       });
 
       this.accessToken = response.data.access_token;
@@ -141,20 +253,52 @@ class TickTickAPI {
   // Gestion des tâches
   async getTasks(projectId = null, completed = false) {
     try {
-      const params = {
-        completed: completed ? 1 : 0
-      };
+      // WORKAROUND: L'endpoint /open/v1/task retourne une erreur 500 "unknown_exception"
+      // On utilise /open/v1/project/{id}/data pour récupérer les tâches par projet
 
       if (projectId) {
-        params.projectId = projectId;
+        // Cas spécifique : récupérer les tâches d'un seul projet
+        const response = await this.client.get(`/open/v1/project/${projectId}/data`);
+        const tasks = response.data.tasks || [];
+
+        // Filtrer par statut completed
+        const filteredTasks = completed
+          ? tasks.filter(task => task.status === 2)
+          : tasks.filter(task => task.status !== 2);
+
+        logger.info(`${filteredTasks.length} tâches récupérées depuis TickTick (projet ${projectId})`);
+        return filteredTasks;
+      } else {
+        // Récupérer TOUS les projets puis agréger toutes les tâches
+        const projects = await this.getProjects();
+        let allTasks = [];
+
+        for (const project of projects) {
+          try {
+            const response = await this.client.get(`/open/v1/project/${project.id}/data`);
+            const tasks = response.data.tasks || [];
+            allTasks = allTasks.concat(tasks);
+          } catch (error) {
+            logger.warn(`Impossible de récupérer les tâches du projet ${project.id}:`, error.message);
+          }
+        }
+
+        // Filtrer par statut completed
+        const filteredTasks = completed
+          ? allTasks.filter(task => task.status === 2)
+          : allTasks.filter(task => task.status !== 2);
+
+        logger.info(`${filteredTasks.length} tâches récupérées depuis TickTick (${projects.length} projets)`);
+        return filteredTasks;
       }
-
-      const response = await this.client.get('/open/v1/task', { params });
-
-      logger.info(`${response.data.length} tâches récupérées depuis TickTick`);
-      return response.data;
     } catch (error) {
-      logger.error('Erreur lors de la récupération des tâches:', error.message);
+      logger.error('Erreur lors de la récupération des tâches:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        hasToken: !!this.accessToken
+      });
       throw error;
     }
   }

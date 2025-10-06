@@ -75,6 +75,30 @@ class ConfigApp {
                 if (config.calendar.businessCalendarId) {
                     document.getElementById('businessCalendarId').value = config.calendar.businessCalendarId;
                 }
+
+                // Pré-remplir TickTick Client ID depuis localStorage ou config
+                const ticktickClientId = localStorage.getItem('ticktick_client_id') ||
+                                         (config.ticktick?.clientId !== '***configured***' ? config.ticktick?.clientId : '');
+                if (ticktickClientId) {
+                    document.getElementById('ticktickClientId').value = ticktickClientId;
+                    document.getElementById('ticktickClientSecret').placeholder = '••••••••••••••• (déjà configuré - laisser vide)';
+                }
+
+                // Pré-remplir Google Client ID
+                const googleClientId = localStorage.getItem('google_client_id') ||
+                                       (config.google?.clientId !== '***configured***' ? config.google?.clientId : '');
+                if (googleClientId) {
+                    document.getElementById('googleClientId').value = googleClientId;
+                    document.getElementById('googleClientSecret').placeholder = '••••••••••••••• (déjà configuré - laisser vide)';
+                }
+
+                // Mettre à jour dynamiquement les redirect URIs dans les instructions
+                if (config.ticktick?.redirectUri) {
+                    document.getElementById('ticktickRedirectUri').textContent = config.ticktick.redirectUri;
+                }
+                if (config.google?.redirectUri) {
+                    document.getElementById('googleRedirectUri').textContent = config.google.redirectUri;
+                }
             }
         } catch (error) {
             console.error('Erreur chargement config:', error);
@@ -126,8 +150,8 @@ class ConfigApp {
         const clientId = document.getElementById('ticktickClientId').value.trim();
         const clientSecret = document.getElementById('ticktickClientSecret').value.trim();
 
-        if (!clientId || !clientSecret) {
-            this.showAlert('Veuillez remplir tous les champs TickTick', 'warning');
+        if (!clientId) {
+            this.showAlert('Veuillez remplir le TickTick Client ID', 'warning');
             return;
         }
 
@@ -138,11 +162,27 @@ class ConfigApp {
             });
 
             if (response.success) {
-                this.showAlert('Configuration TickTick sauvegardée', 'success');
-                // Nettoyer les champs
-                document.getElementById('ticktickClientSecret').value = '';
-                // Recharger le status
-                setTimeout(() => this.checkServiceStatus(), 1000);
+                this.showAlert('✅ Configuration sauvegardée. Redémarrage automatique du serveur...', 'success');
+
+                // Mettre à jour le placeholder
+                const secretField = document.getElementById('ticktickClientSecret');
+                secretField.value = '';
+                secretField.placeholder = '••••••••••••••• (sauvegardé - laisser vide pour conserver)';
+
+                // Marquer comme configuré
+                localStorage.setItem('ticktick_configured', 'true');
+                localStorage.setItem('ticktick_client_id', clientId);
+
+                // Si redémarrage automatique, attendre 5 secondes puis recharger la page
+                if (response.willRestart) {
+                    this.showAlert('⏳ Redémarrage en cours, rechargement automatique dans 5 secondes...', 'info');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 5000);
+                } else {
+                    // Recharger le status normalement
+                    setTimeout(() => this.checkServiceStatus(), 1500);
+                }
             } else {
                 this.showAlert(response.error || 'Erreur sauvegarde TickTick', 'danger');
             }
@@ -156,8 +196,8 @@ class ConfigApp {
         const clientId = document.getElementById('googleClientId').value.trim();
         const clientSecret = document.getElementById('googleClientSecret').value.trim();
 
-        if (!clientId || !clientSecret) {
-            this.showAlert('Veuillez remplir tous les champs Google', 'warning');
+        if (!clientId) {
+            this.showAlert('Veuillez remplir le Google Client ID', 'warning');
             return;
         }
 
@@ -168,11 +208,18 @@ class ConfigApp {
             });
 
             if (response.success) {
-                this.showAlert('Configuration Google sauvegardée', 'success');
-                // Nettoyer les champs
-                document.getElementById('googleClientSecret').value = '';
+                this.showAlert('✅ Configuration Google sauvegardée et rechargée', 'success');
+                // Mettre à jour le placeholder pour indiquer que le secret est sauvegardé
+                const secretField = document.getElementById('googleClientSecret');
+                secretField.value = '';
+                secretField.placeholder = '••••••••••••••• (sauvegardé - laisser vide pour conserver)';
+
+                // Marquer comme configuré localement
+                localStorage.setItem('google_configured', 'true');
+                localStorage.setItem('google_client_id', clientId);
+
                 // Recharger le status
-                setTimeout(() => this.checkServiceStatus(), 1000);
+                setTimeout(() => this.checkServiceStatus(), 1500);
             } else {
                 this.showAlert(response.error || 'Erreur sauvegarde Google', 'danger');
             }
@@ -300,7 +347,7 @@ class ConfigApp {
             }
 
             // Rediriger vers l'autorisation
-            window.location.href = '/api/config/auth/ticktick';
+            window.location.href = '/auth/ticktick/start';
         } catch (error) {
             console.error('Erreur autorisation TickTick:', error);
             this.showAlert('Erreur lors de l\'autorisation TickTick', 'danger');
@@ -317,7 +364,7 @@ class ConfigApp {
             }
 
             // Rediriger vers l'autorisation
-            window.location.href = '/api/config/auth/google';
+            window.location.href = '/auth/google/start';
         } catch (error) {
             console.error('Erreur autorisation Google:', error);
             this.showAlert('Erreur lors de l\'autorisation Google', 'danger');

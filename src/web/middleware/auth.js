@@ -112,7 +112,7 @@ function authRateLimit(req, res, next) {
   const clientIp = req.ip;
   const now = Date.now();
   const windowMs = 15 * 60 * 1000; // 15 minutes
-  const maxAttempts = 5;
+  const maxAttempts = 50; // Augmenté de 5 à 50 tentatives
 
   // Simple in-memory store (à remplacer par Redis en production)
   if (!global.authAttempts) {
