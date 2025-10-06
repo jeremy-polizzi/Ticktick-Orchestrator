@@ -77,12 +77,12 @@ class OrchestratorApp {
             });
         });
 
-        // Auto-refresh every 30 seconds
+        // Auto-refresh every 2 minutes (pour éviter rate limiting)
         setInterval(() => {
             if (this.isAuthenticated) {
                 this.refreshCurrentTab();
             }
-        }, 30000);
+        }, 120000);
     }
 
     // === AUTHENTICATION ===

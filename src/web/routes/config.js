@@ -7,6 +7,12 @@ const logger = require('../../utils/logger');
 
 const CONFIG_FILE = path.join(__dirname, '../../../.env');
 
+// Instances singleton pour éviter les fuites mémoire
+const TickTickAPI = require('../../api/ticktick-api');
+const GoogleCalendarAPI = require('../../api/google-calendar-api');
+const ticktickAPI = new TickTickAPI();
+const googleAPI = new GoogleCalendarAPI();
+
 // Lire la configuration actuelle
 router.get('/current', async (req, res) => {
   try {
@@ -282,14 +288,11 @@ router.get('/auth/google/callback', async (req, res) => {
       });
     }
 
-    const GoogleCalendarAPI = require('../../api/google-calendar-api');
-    const google = new GoogleCalendarAPI();
-
     // Échanger le code contre un token
-    const tokens = await google.exchangeCodeForTokens(code);
+    const tokens = await googleAPI.exchangeCodeForTokens(code);
 
     // Sauvegarder les tokens
-    await google.saveTokens(tokens);
+    await googleAPI.saveTokens(tokens);
 
     logger.info('Autorisation Google Calendar réussie');
 
@@ -318,9 +321,7 @@ router.get('/status', async (req, res) => {
 
     // Vérifier les tokens TickTick
     try {
-      const TickTickAPI = require('../../api/ticktick-api');
-      const ticktick = new TickTickAPI();
-      const hasTokens = await ticktick.hasValidTokens();
+      const hasTokens = await ticktickAPI.hasValidTokens();
       status.ticktick.connected = hasTokens;
     } catch (error) {
       logger.debug('TickTick non connecté:', error.message);
@@ -328,9 +329,7 @@ router.get('/status', async (req, res) => {
 
     // Vérifier les tokens Google
     try {
-      const GoogleCalendarAPI = require('../../api/google-calendar-api');
-      const google = new GoogleCalendarAPI();
-      const hasTokens = await google.hasValidTokens();
+      const hasTokens = await googleAPI.hasValidTokens();
       status.google.connected = hasTokens;
     } catch (error) {
       logger.debug('Google non connecté:', error.message);
