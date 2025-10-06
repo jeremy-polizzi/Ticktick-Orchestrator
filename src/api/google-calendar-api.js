@@ -2,8 +2,16 @@ const { google } = require('googleapis');
 const config = require('../config/config');
 const logger = require('../utils/logger');
 
+// Singleton instance
+let instance = null;
+
 class GoogleCalendarAPI {
   constructor() {
+    // Singleton pattern pour éviter les fuites mémoire
+    if (instance) {
+      return instance;
+    }
+
     this.oauth2Client = new google.auth.OAuth2(
       config.google.clientId,
       config.google.clientSecret,
@@ -14,6 +22,8 @@ class GoogleCalendarAPI {
       version: 'v3',
       auth: this.oauth2Client
     });
+
+    instance = this;
   }
 
   // Authentification OAuth
@@ -71,15 +81,17 @@ class GoogleCalendarAPI {
 
       this.oauth2Client.setCredentials(tokens);
 
-      // Configuration du refresh automatique
-      this.oauth2Client.on('tokens', async (newTokens) => {
-        if (newTokens.refresh_token) {
-          tokens.refresh_token = newTokens.refresh_token;
-        }
-        tokens.access_token = newTokens.access_token;
-        await this.saveTokens(tokens);
-        logger.info('Google Calendar tokens rafraîchis automatiquement');
-      });
+      // Configuration du refresh automatique (une seule fois)
+      if (this.oauth2Client.listenerCount('tokens') === 0) {
+        this.oauth2Client.on('tokens', async (newTokens) => {
+          if (newTokens.refresh_token) {
+            tokens.refresh_token = newTokens.refresh_token;
+          }
+          tokens.access_token = newTokens.access_token;
+          await this.saveTokens(tokens);
+          logger.info('Google Calendar tokens rafraîchis automatiquement');
+        });
+      }
 
       logger.info('Google Calendar tokens chargés depuis le disque');
       return true;
