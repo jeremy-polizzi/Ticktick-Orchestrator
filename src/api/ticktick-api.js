@@ -8,6 +8,10 @@ class TickTickAPI {
     this.accessToken = null;
     this.refreshToken = null;
 
+    // Cache en mémoire pour éviter rate limiting (TTL: 30s)
+    this.cache = new Map();
+    this.cacheTTL = 30000; // 30 secondes
+
     // Configuration axios avec retry automatique
     this.client = axios.create({
       baseURL: this.baseUrl,
@@ -40,6 +44,35 @@ class TickTickAPI {
         return Promise.reject(error);
       }
     );
+  }
+
+  // Système de cache pour éviter rate limiting TickTick
+  getCacheKey(method, params = {}) {
+    return `${method}:${JSON.stringify(params)}`;
+  }
+
+  getFromCache(key) {
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
+      logger.debug(`Cache hit pour ${key}`);
+      return cached.data;
+    }
+    if (cached) {
+      this.cache.delete(key); // Expirer le cache
+    }
+    return null;
+  }
+
+  setCache(key, data) {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now()
+    });
+  }
+
+  clearCache() {
+    this.cache.clear();
+    logger.info('Cache TickTick vidé');
   }
 
   // Authentification OAuth
@@ -252,6 +285,11 @@ class TickTickAPI {
 
   // Gestion des tâches
   async getTasks(projectId = null, completed = false) {
+    // Vérifier le cache d'abord
+    const cacheKey = this.getCacheKey('getTasks', { projectId, completed });
+    const cached = this.getFromCache(cacheKey);
+    if (cached) return cached;
+
     try {
       // WORKAROUND: L'endpoint /open/v1/task retourne une erreur 500 "unknown_exception"
       // On utilise /open/v1/project/{id}/data pour récupérer les tâches par projet
@@ -267,6 +305,9 @@ class TickTickAPI {
           : tasks.filter(task => task.status !== 2);
 
         logger.info(`${filteredTasks.length} tâches récupérées depuis TickTick (projet ${projectId})`);
+
+        // Sauvegarder en cache
+        this.setCache(cacheKey, filteredTasks);
         return filteredTasks;
       } else {
         // Récupérer TOUS les projets puis agréger toutes les tâches
@@ -289,6 +330,9 @@ class TickTickAPI {
           : allTasks.filter(task => task.status !== 2);
 
         logger.info(`${filteredTasks.length} tâches récupérées depuis TickTick (${projects.length} projets)`);
+
+        // Sauvegarder en cache
+        this.setCache(cacheKey, filteredTasks);
         return filteredTasks;
       }
     } catch (error) {
@@ -304,9 +348,18 @@ class TickTickAPI {
   }
 
   async getTask(taskId) {
+    // Vérifier le cache d'abord
+    const cacheKey = this.getCacheKey('getTask', { taskId });
+    const cached = this.getFromCache(cacheKey);
+    if (cached) return cached;
+
     try {
       const response = await this.client.get(`/open/v1/task/${taskId}`);
-      return response.data;
+      const task = response.data;
+
+      // Sauvegarder en cache
+      this.setCache(cacheKey, task);
+      return task;
     } catch (error) {
       logger.error(`Erreur lors de la récupération de la tâche ${taskId}:`, error.message);
       throw error;
@@ -318,6 +371,10 @@ class TickTickAPI {
       const response = await this.client.post('/open/v1/task', taskData);
 
       logger.info(`Tâche créée: ${taskData.title}`);
+
+      // Invalider le cache après modification
+      this.clearCache();
+
       return response.data;
     } catch (error) {
       logger.error('Erreur lors de la création de la tâche:', error.message);
@@ -325,11 +382,17 @@ class TickTickAPI {
     }
   }
 
-  async updateTask(taskId, taskData) {
+  async updateTask(taskId, taskData, skipCacheClear = false) {
     try {
       const response = await this.client.post(`/open/v1/task/${taskId}`, taskData);
 
       logger.info(`Tâche mise à jour: ${taskId}`);
+
+      // Invalider le cache après modification (sauf si appelé depuis updateMultipleTasks)
+      if (!skipCacheClear) {
+        this.clearCache();
+      }
+
       return response.data;
     } catch (error) {
       logger.error(`Erreur lors de la mise à jour de la tâche ${taskId}:`, error.message);
@@ -337,11 +400,17 @@ class TickTickAPI {
     }
   }
 
-  async deleteTask(taskId) {
+  async deleteTask(taskId, skipCacheClear = false) {
     try {
       await this.client.delete(`/open/v1/task/${taskId}`);
 
       logger.info(`Tâche supprimée: ${taskId}`);
+
+      // Invalider le cache après modification (sauf si appelé depuis deleteMultipleTasks)
+      if (!skipCacheClear) {
+        this.clearCache();
+      }
+
       return true;
     } catch (error) {
       logger.error(`Erreur lors de la suppression de la tâche ${taskId}:`, error.message);
@@ -355,7 +424,7 @@ class TickTickAPI {
 
     for (const taskId of taskIds) {
       try {
-        const result = await this.updateTask(taskId, updateData);
+        const result = await this.updateTask(taskId, updateData, true); // skipCacheClear
         results.push({ taskId, success: true, data: result });
       } catch (error) {
         results.push({ taskId, success: false, error: error.message });
@@ -365,6 +434,9 @@ class TickTickAPI {
     const successes = results.filter(r => r.success).length;
     logger.info(`Mise à jour en masse: ${successes}/${taskIds.length} tâches traitées`);
 
+    // Invalider le cache UNE SEULE FOIS à la fin
+    this.clearCache();
+
     return results;
   }
 
@@ -373,7 +445,7 @@ class TickTickAPI {
 
     for (const taskId of taskIds) {
       try {
-        await this.deleteTask(taskId);
+        await this.deleteTask(taskId, true); // skipCacheClear
         results.push({ taskId, success: true });
       } catch (error) {
         results.push({ taskId, success: false, error: error.message });
@@ -383,14 +455,26 @@ class TickTickAPI {
     const successes = results.filter(r => r.success).length;
     logger.info(`Suppression en masse: ${successes}/${taskIds.length} tâches supprimées`);
 
+    // Invalider le cache UNE SEULE FOIS à la fin
+    this.clearCache();
+
     return results;
   }
 
   // Gestion des projets/listes
   async getProjects() {
+    // Vérifier le cache d'abord
+    const cacheKey = this.getCacheKey('getProjects');
+    const cached = this.getFromCache(cacheKey);
+    if (cached) return cached;
+
     try {
       const response = await this.client.get('/open/v1/project');
-      return response.data;
+      const projects = response.data;
+
+      // Sauvegarder en cache
+      this.setCache(cacheKey, projects);
+      return projects;
     } catch (error) {
       logger.error('Erreur lors de la récupération des projets:', error.message);
       throw error;
