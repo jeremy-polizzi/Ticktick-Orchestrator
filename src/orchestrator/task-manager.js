@@ -173,6 +173,7 @@ class TaskManager {
 
     // Patterns de reconnaissance
     const patterns = {
+      list: /(?:liste|affiche|montre|voir|donne|obtenir)[-\s]*(moi|me|nous)?\s+(?:les?\s+)?(?:tâches?|tasks?)/i,
       move: /d[ée]placer?.*(vers|dans|à)\s+(.+?)(?:\s|$)/i,
       tag: /ajouter?\s+(?:le\s+)?tag\s+([#\w]+)/i,
       delete: /supprimer?.*(tâches?|tous?)/i,
@@ -183,7 +184,8 @@ class TaskManager {
 
     // Extraire les filtres
     const tagMatch = command.match(/#(\w+)/g);
-    const listMatch = command.match(/liste\s+['""]?([^'""]+)['""]?/i);
+    // Ne pas matcher "liste moi" comme nom de liste - seulement si "de la liste X" ou "dans la liste X"
+    const listMatch = command.match(/(?:de\s+la\s+liste|dans\s+la\s+liste|liste)\s+['""]?([^'""]+)['""]?/i);
     const dateMatch = command.match(/(?:aujourd'hui|demain|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|\d{1,2}\/\d{1,2})/i);
 
     const parsed = {
@@ -192,8 +194,10 @@ class TaskManager {
       parameters: {}
     };
 
-    // Déterminer l'action
-    if (patterns.move.test(lowercaseCommand)) {
+    // Déterminer l'action (ordre important: list doit être avant les autres)
+    if (patterns.list.test(lowercaseCommand)) {
+      parsed.action = 'list';
+    } else if (patterns.move.test(lowercaseCommand)) {
       parsed.action = 'move';
       const match = lowercaseCommand.match(patterns.move);
       parsed.parameters.targetList = match[2].trim();
@@ -221,7 +225,8 @@ class TaskManager {
       parsed.filters.tags = tagMatch.map(tag => tag.substring(1)); // Enlever le #
     }
 
-    if (listMatch) {
+    // Pour l'action 'list', ne pas ajouter de filtre sur listName si c'est "liste moi"
+    if (listMatch && parsed.action !== 'list') {
       parsed.filters.listName = listMatch[1];
     }
 
@@ -245,6 +250,17 @@ class TaskManager {
       const taskIds = tasks.map(task => task.id);
 
       switch (parsedCommand.action) {
+        case 'list':
+          // Action de visualisation - retourner simplement les tâches
+          logger.info(`Retour de ${tasks.length} tâches filtrées`);
+          return {
+            success: true,
+            action: 'list',
+            tasks: tasks,
+            count: tasks.length,
+            message: `${tasks.length} tâche(s) trouvée(s)`
+          };
+
         case 'move':
           const targetProject = await this.findProjectByName(parsedCommand.parameters.targetList);
           if (!targetProject) {

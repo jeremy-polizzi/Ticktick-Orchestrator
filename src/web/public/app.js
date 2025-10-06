@@ -322,12 +322,47 @@ class OrchestratorApp {
             const result = await this.apiCall('/api/tasks/command', 'POST', { command });
 
             if (result.success) {
-                resultDiv.innerHTML = `
-                    <div class="alert alert-success">
-                        <i class="bi bi-check-circle me-2"></i>
-                        Commande exécutée avec succès
-                    </div>
-                `;
+                // Si c'est une action de liste, afficher les tâches
+                if (result.action === 'list' && result.tasks) {
+                    const tasksList = result.tasks.map(task => {
+                        const dueDate = task.dueDate ? new Date(task.dueDate).toLocaleDateString('fr-FR') : 'Pas de date';
+                        const priority = task.priority || 0;
+                        const priorityBadge = priority > 0 ? `<span class="badge bg-danger">P${priority}</span>` : '';
+
+                        return `
+                            <div class="border-bottom pb-2 mb-2">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <strong>${task.title}</strong>
+                                        ${priorityBadge}
+                                    </div>
+                                    <small class="text-muted">${dueDate}</small>
+                                </div>
+                                ${task.tags && task.tags.length > 0 ? `
+                                    <div class="mt-1">
+                                        ${task.tags.map(tag => `<span class="badge bg-secondary">#${tag}</span>`).join(' ')}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('');
+
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <h6><i class="bi bi-list-check me-2"></i>${result.message}</h6>
+                            <div class="mt-3" style="max-height: 400px; overflow-y: auto;">
+                                ${tasksList}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle me-2"></i>
+                            Commande exécutée avec succès
+                        </div>
+                    `;
+                }
                 commandInput.value = '';
 
                 // Rafraîchir les données
