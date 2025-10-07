@@ -649,9 +649,9 @@
 
             <!-- Scheduler Tab -->
             <div class="tab-pane fade" id="scheduler" role="tabpanel">
-                <div class="alert alert-info mb-4">
-                    <h6 class="mb-2"><i class="bi bi-info-circle"></i> Planificateur Intelligent</h6>
-                    <p class="mb-0 small">Planifiez automatiquement vos tâches selon vos priorités et disponibilités. Le scheduler analyse votre calendrier et propose des créneaux optimaux pour vos tâches importantes.</p>
+                <div class="alert alert-primary mb-4" style="background-color: #e7f3ff; border-color: #b6d4fe; color: #004085;">
+                    <h6 class="mb-2" style="color: #004085;"><i class="bi bi-info-circle"></i> Planificateur Intelligent</h6>
+                    <p class="mb-0 small" style="color: #004085;">Planifiez automatiquement vos tâches selon vos priorités et disponibilités. Le scheduler analyse votre calendrier et propose des créneaux optimaux pour vos tâches importantes.</p>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h3>Planificateur Intelligent</h3>
@@ -694,14 +694,16 @@
                             </div>
                             <div class="card-body">
                                 <div id="schedulerInfo">
-                                    <div class="mb-2">
-                                        <strong>État:</strong> <span id="schedulerState">-</span>
+                                    <div class="mb-3">
+                                        <strong>État:</strong> <span id="schedulerState" class="badge bg-secondary ms-2">-</span>
                                     </div>
                                     <div class="mb-2">
-                                        <strong>Prochaine exécution:</strong> <span id="nextRun">-</span>
+                                        <strong>Prochaine exécution:</strong><br>
+                                        <span id="nextRun" class="text-muted small">-</span>
                                     </div>
                                     <div>
-                                        <strong>Dernière exécution:</strong> <span id="lastRun">-</span>
+                                        <strong>Dernière exécution:</strong><br>
+                                        <span id="lastRun" class="text-muted small">-</span>
                                     </div>
                                 </div>
                             </div>

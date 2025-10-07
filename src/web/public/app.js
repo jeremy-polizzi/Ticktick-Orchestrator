@@ -535,7 +535,12 @@ class OrchestratorApp {
             const status = await this.apiCall('/api/scheduler/status');
 
             if (status.success) {
-                document.getElementById('schedulerState').textContent = status.status.isRunning ? 'Actif' : 'Inactif';
+                const schedulerStateEl = document.getElementById('schedulerState');
+                const isRunning = status.status.isRunning || (status.status.scheduledJobs && status.status.scheduledJobs.length > 0);
+
+                schedulerStateEl.textContent = isRunning ? '✓ Actif' : '✗ Inactif';
+                schedulerStateEl.className = `badge ms-2 ${isRunning ? 'bg-success' : 'bg-danger'}`;
+
                 document.getElementById('nextRun').textContent = status.status.nextRun ?
                     new Date(status.status.nextRun).toLocaleString('fr-FR') : '-';
                 document.getElementById('lastRun').textContent = status.status.lastRun ?
