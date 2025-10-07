@@ -388,163 +388,6 @@ class OrchestratorApp {
         }
     }
 
-    // === TASKS TAB ===
-
-    async loadTasks(filterParams = {}) {
-        const tasksContainer = document.getElementById('tasksList');
-
-        try {
-            // Construire l'URL avec les paramètres de filtre
-            let url = '/api/tasks?limit=100&withPriorities=true';
-
-            if (filterParams.completed !== undefined) {
-                url += `&completed=${filterParams.completed}`;
-            }
-            if (filterParams.tags) {
-                url += `&tags=${filterParams.tags}`;
-            }
-
-            const response = await this.apiCall(url);
-
-            if (response.success && response.tasks.length > 0) {
-                let filteredTasks = response.tasks;
-
-                // Filtres additionnels côté client
-                if (filterParams.filter) {
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-
-                    switch (filterParams.filter) {
-                        case 'today':
-                            filteredTasks = filteredTasks.filter(task => {
-                                if (!task.dueDate) return false;
-                                const taskDate = new Date(task.dueDate);
-                                taskDate.setHours(0, 0, 0, 0);
-                                return taskDate.getTime() === today.getTime();
-                            });
-                            break;
-                        case 'overdue':
-                            filteredTasks = filteredTasks.filter(task => {
-                                if (!task.dueDate) return false;
-                                const taskDate = new Date(task.dueDate);
-                                taskDate.setHours(0, 0, 0, 0);
-                                return taskDate < today && task.status !== 2;
-                            });
-                            break;
-                    }
-                }
-
-                if (filteredTasks.length > 0) {
-                    tasksContainer.innerHTML = filteredTasks.map(task => this.renderTaskCard(task)).join('');
-                } else {
-                    tasksContainer.innerHTML = `
-                        <div class="col-12 text-center py-5">
-                            <i class="bi bi-inbox" style="font-size: 3rem; color: #6c757d;"></i>
-                            <p class="mt-3 text-muted">Aucune tâche trouvée avec ces filtres</p>
-                        </div>
-                    `;
-                }
-            } else {
-                tasksContainer.innerHTML = `
-                    <div class="col-12 text-center py-5">
-                        <i class="bi bi-inbox" style="font-size: 3rem; color: #6c757d;"></i>
-                        <p class="mt-3 text-muted">Aucune tâche trouvée</p>
-                    </div>
-                `;
-            }
-        } catch (error) {
-            console.error('Error loading tasks:', error);
-            tasksContainer.innerHTML = `
-                <div class="col-12 text-center py-5">
-                    <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
-                    <p class="mt-3 text-muted">Erreur lors du chargement des tâches</p>
-                </div>
-            `;
-        }
-    }
-
-    renderTaskCard(task) {
-        const priority = task.priority_score ? (task.priority_score * 100).toFixed(0) : 0;
-        const dueDate = task.dueDate ? new Date(task.dueDate).toLocaleDateString('fr-FR') : 'Aucune';
-
-        return `
-            <div class="col-md-6 mb-3">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <h6 class="card-title">${this.escapeHtml(task.title)}</h6>
-                            <span class="badge bg-primary">${priority}%</span>
-                        </div>
-                        ${task.content ? `<p class="card-text small text-muted">${this.escapeHtml(task.content.substring(0, 100))}...</p>` : ''}
-                        <div class="row">
-                            <div class="col-6">
-                                <small class="text-muted">Échéance: ${dueDate}</small>
-                            </div>
-                            <div class="col-6 text-end">
-                                ${task.tags ? task.tags.map(tag => `<span class="badge bg-secondary me-1">#${tag}</span>`).join('') : ''}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    async filterTasks() {
-        // Récupérer les valeurs des filtres
-        const filterSelect = document.getElementById('taskFilter').value;
-        const tagFilter = document.getElementById('tagFilter').value.trim();
-
-        const filterParams = {};
-
-        // Gérer le filtre principal
-        switch (filterSelect) {
-            case 'pending':
-                filterParams.completed = 'false';
-                break;
-            case 'completed':
-                filterParams.completed = 'true';
-                break;
-            case 'today':
-                filterParams.completed = 'false';
-                filterParams.filter = 'today';
-                break;
-            case 'overdue':
-                filterParams.completed = 'false';
-                filterParams.filter = 'overdue';
-                break;
-            case 'all':
-            default:
-                // Pas de filtre, charger toutes les tâches
-                break;
-        }
-
-        // Gérer le filtre par tags
-        if (tagFilter) {
-            filterParams.tags = tagFilter;
-        }
-
-        // Charger les tâches avec les filtres
-        await this.loadTasks(filterParams);
-    }
-
-    async prioritizeTasks() {
-        this.showLoading();
-        try {
-            await this.apiCall('/api/tasks/prioritize', 'POST');
-            this.showAlert('Priorisation calculée avec succès', 'success');
-            await this.loadTasks();
-        } catch (error) {
-            this.showAlert('Erreur lors de la priorisation', 'danger');
-        } finally {
-            this.hideLoading();
-        }
-    }
-
-    async refreshTasks() {
-        await this.loadTasks();
-    }
-
     // === CALENDAR TAB ===
 
     async loadCalendar() {
@@ -716,9 +559,6 @@ class OrchestratorApp {
         switch (tabName) {
             case 'dashboard':
                 await this.loadDashboard();
-                break;
-            case 'tasks':
-                await this.loadTasks();
                 break;
             case 'calendar':
                 await this.loadCalendar();
@@ -1020,9 +860,6 @@ class OrchestratorApp {
 
 // Global functions pour les event handlers HTML
 window.executeCommand = () => app.executeCommand();
-window.refreshTasks = () => app.refreshTasks();
-window.filterTasks = () => app.filterTasks();
-window.prioritizeTasks = () => app.prioritizeTasks();
 window.syncCalendar = () => app.syncCalendar();
 window.refreshCalendar = () => app.refreshCalendar();
 window.startScheduler = () => app.startScheduler();
