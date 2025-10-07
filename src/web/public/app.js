@@ -390,14 +390,60 @@ class OrchestratorApp {
 
     // === TASKS TAB ===
 
-    async loadTasks() {
+    async loadTasks(filterParams = {}) {
         const tasksContainer = document.getElementById('tasksList');
 
         try {
-            const response = await this.apiCall('/api/tasks?limit=20&withPriorities=true');
+            // Construire l'URL avec les paramètres de filtre
+            let url = '/api/tasks?limit=100&withPriorities=true';
+
+            if (filterParams.completed !== undefined) {
+                url += `&completed=${filterParams.completed}`;
+            }
+            if (filterParams.tags) {
+                url += `&tags=${filterParams.tags}`;
+            }
+
+            const response = await this.apiCall(url);
 
             if (response.success && response.tasks.length > 0) {
-                tasksContainer.innerHTML = response.tasks.map(task => this.renderTaskCard(task)).join('');
+                let filteredTasks = response.tasks;
+
+                // Filtres additionnels côté client
+                if (filterParams.filter) {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    switch (filterParams.filter) {
+                        case 'today':
+                            filteredTasks = filteredTasks.filter(task => {
+                                if (!task.dueDate) return false;
+                                const taskDate = new Date(task.dueDate);
+                                taskDate.setHours(0, 0, 0, 0);
+                                return taskDate.getTime() === today.getTime();
+                            });
+                            break;
+                        case 'overdue':
+                            filteredTasks = filteredTasks.filter(task => {
+                                if (!task.dueDate) return false;
+                                const taskDate = new Date(task.dueDate);
+                                taskDate.setHours(0, 0, 0, 0);
+                                return taskDate < today && task.status !== 2;
+                            });
+                            break;
+                    }
+                }
+
+                if (filteredTasks.length > 0) {
+                    tasksContainer.innerHTML = filteredTasks.map(task => this.renderTaskCard(task)).join('');
+                } else {
+                    tasksContainer.innerHTML = `
+                        <div class="col-12 text-center py-5">
+                            <i class="bi bi-inbox" style="font-size: 3rem; color: #6c757d;"></i>
+                            <p class="mt-3 text-muted">Aucune tâche trouvée avec ces filtres</p>
+                        </div>
+                    `;
+                }
             } else {
                 tasksContainer.innerHTML = `
                     <div class="col-12 text-center py-5">
@@ -445,8 +491,41 @@ class OrchestratorApp {
     }
 
     async filterTasks() {
-        // Implémentation du filtrage
-        await this.loadTasks();
+        // Récupérer les valeurs des filtres
+        const filterSelect = document.getElementById('taskFilter').value;
+        const tagFilter = document.getElementById('tagFilter').value.trim();
+
+        const filterParams = {};
+
+        // Gérer le filtre principal
+        switch (filterSelect) {
+            case 'pending':
+                filterParams.completed = 'false';
+                break;
+            case 'completed':
+                filterParams.completed = 'true';
+                break;
+            case 'today':
+                filterParams.completed = 'false';
+                filterParams.filter = 'today';
+                break;
+            case 'overdue':
+                filterParams.completed = 'false';
+                filterParams.filter = 'overdue';
+                break;
+            case 'all':
+            default:
+                // Pas de filtre, charger toutes les tâches
+                break;
+        }
+
+        // Gérer le filtre par tags
+        if (tagFilter) {
+            filterParams.tags = tagFilter;
+        }
+
+        // Charger les tâches avec les filtres
+        await this.loadTasks(filterParams);
     }
 
     async prioritizeTasks() {
