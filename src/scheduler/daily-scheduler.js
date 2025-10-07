@@ -135,16 +135,24 @@ class DailyScheduler {
     try {
       const calendarIds = [config.calendars.jeremy, config.calendars.business];
       const slots = new Map();
+      const planningHorizon = config.scheduler.planningHorizonDays;
 
-      // Analyser les 14 prochains jours
-      for (let i = 0; i < 14; i++) {
+      // Analyser les X prochains jours (config)
+      logger.info(`Analyse des créneaux sur ${planningHorizon} jours`);
+
+      for (let i = 0; i < planningHorizon; i++) {
         const date = new Date();
         date.setDate(date.getDate() + i);
 
         const daySlots = await this.calendarSync.googleCalendar.getAvailableSlots(
           calendarIds,
           date,
-          60 // Durée minimale: 1 heure
+          60, // Durée minimale: 1 heure
+          {
+            bufferMinutes: 15,
+            excludeMorning: true,
+            morningEndHour: 12
+          }
         );
 
         slots.set(date.toDateString(), daySlots);
@@ -160,16 +168,23 @@ class DailyScheduler {
 
   async distributeTasks(prioritizedTasks, availableSlots) {
     try {
-      const distribution = [];
+      const distribution = {};
       const maxTasksPerDay = config.scheduler.maxDailyTasks;
+      const planningHorizon = config.scheduler.planningHorizonDays;
 
-      // Prendre les tâches les plus prioritaires
-      const topTasks = prioritizedTasks.slice(0, maxTasksPerDay * 7); // Max 7 jours
-
-      let currentDayIndex = 0;
+      // Jours disponibles triés
       const days = Array.from(availableSlots.keys()).sort();
 
-      for (const task of topTasks) {
+      logger.info(`Distribution intelligente de ${prioritizedTasks.length} tâches sur ${days.length} jours (charge max: ${maxTasksPerDay} tâches/jour)`);
+
+      // Calculer la capacité totale d'accueil
+      const totalCapacity = days.length * maxTasksPerDay;
+      const tasksToDistribute = Math.min(prioritizedTasks.length, totalCapacity);
+
+      // Distribuer les tâches prioritaires de façon équilibrée
+      for (let i = 0; i < tasksToDistribute; i++) {
+        const task = prioritizedTasks[i];
+
         // Trouver le meilleur jour pour cette tâche
         const bestDay = this.findBestDayForTask(task, days, availableSlots, distribution);
 
@@ -178,14 +193,37 @@ class DailyScheduler {
             distribution[bestDay] = [];
           }
 
+          // Vérifier la capacité avant ajout
           if (distribution[bestDay].length < maxTasksPerDay) {
             distribution[bestDay].push(task);
+            logger.debug(`Tâche "${task.title}" planifiée pour ${bestDay}`);
+          } else {
+            // Chercher un jour alternatif si le jour optimal est plein
+            const alternativeDay = this.findAlternativeDayForTask(task, days, availableSlots, distribution, maxTasksPerDay);
+            if (alternativeDay) {
+              if (!distribution[alternativeDay]) {
+                distribution[alternativeDay] = [];
+              }
+              distribution[alternativeDay].push(task);
+              logger.debug(`Tâche "${task.title}" planifiée (alternative) pour ${alternativeDay}`);
+            } else {
+              logger.warn(`Impossible de planifier la tâche "${task.title}", aucun créneau disponible`);
+            }
           }
         }
       }
 
-      logger.info(`Distribution calculée: ${Object.keys(distribution).length} jours planifiés`);
-      return distribution;
+      // Calculer statistiques de distribution
+      const totalDistributed = Object.values(distribution).reduce((sum, tasks) => sum + tasks.length, 0);
+      const daysUsed = Object.keys(distribution).length;
+      const avgTasksPerDay = daysUsed > 0 ? (totalDistributed / daysUsed).toFixed(1) : 0;
+
+      logger.info(`Distribution calculée: ${totalDistributed} tâches sur ${daysUsed} jours (moyenne: ${avgTasksPerDay} tâches/jour)`);
+
+      // Équilibrer la charge si nécessaire
+      const balancedDistribution = this.balanceDistribution(distribution, days, maxTasksPerDay);
+
+      return balancedDistribution;
     } catch (error) {
       logger.error('Erreur lors de la distribution des tâches:', error.message);
       throw error;
@@ -247,6 +285,94 @@ class DailyScheduler {
       // Favoriser les tâches business en semaine
       return context.isBusiness || !context.isPersonal;
     }
+  }
+
+  findAlternativeDayForTask(task, days, availableSlots, currentDistribution, maxTasksPerDay) {
+    // Chercher un jour alternatif disponible
+    // Prioriser les jours avec le moins de charge actuelle
+
+    const availableDays = days.filter(day => {
+      const dayLoad = currentDistribution[day] ? currentDistribution[day].length : 0;
+      const slots = availableSlots.get(day);
+      return dayLoad < maxTasksPerDay && slots && slots.length > 0;
+    });
+
+    if (availableDays.length === 0) return null;
+
+    // Trier par charge (du moins chargé au plus chargé)
+    availableDays.sort((a, b) => {
+      const loadA = currentDistribution[a] ? currentDistribution[a].length : 0;
+      const loadB = currentDistribution[b] ? currentDistribution[b].length : 0;
+      return loadA - loadB;
+    });
+
+    return availableDays[0]; // Retourner le jour le moins chargé
+  }
+
+  balanceDistribution(distribution, days, maxTasksPerDay) {
+    // Équilibrer la charge entre les jours pour éviter les pics
+    // Objectif: avoir une répartition uniforme sans jours surchargés
+
+    const distributionCopy = { ...distribution };
+    const loads = days.map(day => ({
+      day,
+      load: distributionCopy[day] ? distributionCopy[day].length : 0,
+      tasks: distributionCopy[day] || []
+    }));
+
+    // Calculer la moyenne de charge
+    const totalTasks = loads.reduce((sum, dayLoad) => sum + dayLoad.load, 0);
+    const avgLoad = totalTasks / days.length;
+
+    // Seuil de déséquilibre acceptable
+    const imbalanceThreshold = 1.5;
+
+    // Identifier les jours surchargés
+    const overloadedDays = loads.filter(dayLoad => dayLoad.load > avgLoad * imbalanceThreshold);
+
+    if (overloadedDays.length === 0) {
+      logger.info('Distribution déjà équilibrée');
+      return distributionCopy;
+    }
+
+    logger.info(`Équilibrage de ${overloadedDays.length} jours surchargés (charge moyenne: ${avgLoad.toFixed(1)})`);
+
+    // Redistribuer les tâches des jours surchargés
+    for (const overloadedDay of overloadedDays) {
+      const excessTasks = Math.floor(overloadedDay.load - avgLoad);
+
+      if (excessTasks <= 0) continue;
+
+      // Trouver des jours sous-chargés pour déplacer les tâches
+      const underloadedDays = loads.filter(dayLoad =>
+        dayLoad.load < maxTasksPerDay &&
+        dayLoad.day !== overloadedDay.day
+      ).sort((a, b) => a.load - b.load);
+
+      // Déplacer les tâches les moins prioritaires (en fin de liste)
+      const tasksToMove = overloadedDay.tasks.slice(-excessTasks);
+
+      for (const task of tasksToMove) {
+        const targetDay = underloadedDays.find(dayLoad => dayLoad.load < maxTasksPerDay);
+
+        if (targetDay) {
+          // Retirer de l'ancien jour
+          distributionCopy[overloadedDay.day] = distributionCopy[overloadedDay.day].filter(t => t.id !== task.id);
+          overloadedDay.load--;
+
+          // Ajouter au nouveau jour
+          if (!distributionCopy[targetDay.day]) {
+            distributionCopy[targetDay.day] = [];
+          }
+          distributionCopy[targetDay.day].push(task);
+          targetDay.load++;
+
+          logger.debug(`Tâche "${task.title}" déplacée de ${overloadedDay.day} vers ${targetDay.day}`);
+        }
+      }
+    }
+
+    return distributionCopy;
   }
 
   estimateTaskDuration(task) {

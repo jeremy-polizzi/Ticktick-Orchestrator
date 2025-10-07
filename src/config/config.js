@@ -79,7 +79,8 @@ const config = {
   scheduler: {
     dailyTime: process.env.DAILY_SCHEDULER_TIME || '06:00',
     syncInterval: parseInt(process.env.SYNC_INTERVAL_MINUTES) || 30,
-    maxDailyTasks: parseInt(process.env.MAX_DAILY_TASKS) || 3,
+    maxDailyTasks: parseInt(process.env.MAX_DAILY_TASKS) || 2, // Charge légère: 2 tâches max/jour
+    planningHorizonDays: parseInt(process.env.PLANNING_HORIZON_DAYS) || 60, // Planification sur 60 jours
     timezone: 'Europe/Paris'
   },
 
