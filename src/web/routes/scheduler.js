@@ -6,22 +6,10 @@ const logger = require('../../utils/logger');
 // Instance du scheduler
 const scheduler = new DailyScheduler();
 
-// Initialiser et démarrer le scheduler automatiquement
-scheduler.initialize()
-  .then(() => {
-    logger.info('DailyScheduler initialisé avec succès');
-
-    // Démarrer le scheduler automatiquement
-    const started = scheduler.startScheduler();
-    if (started) {
-      logger.info('Scheduler démarré automatiquement au démarrage de l\'application');
-    } else {
-      logger.warn('Échec du démarrage automatique du scheduler');
-    }
-  })
-  .catch(error => {
-    logger.error('Erreur lors de l\'initialisation du DailyScheduler:', error.message);
-  });
+// Initialiser le scheduler (démarrage manuel via l'interface)
+scheduler.initialize().catch(error => {
+  logger.error('Erreur lors de l\'initialisation du DailyScheduler:', error.message);
+});
 
 // === CONTRÔLE DU SCHEDULER ===
 
