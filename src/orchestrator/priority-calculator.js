@@ -1,9 +1,12 @@
 const logger = require('../utils/logger');
 const config = require('../config/config');
+const fs = require('fs');
+const path = require('path');
 
 class PriorityCalculator {
   constructor() {
     this.weights = config.priorities;
+    this.userProfile = this.loadUserProfile();
 
     // Mots-clés pour l'analyse de complexité
     this.complexityKeywords = {
@@ -19,16 +22,35 @@ class PriorityCalculator {
       low: ['optionnel', 'si possible', 'when possible']
     };
 
-    // Tags spéciaux avec poids
+    // Tags spéciaux avec poids - BOOST pour objectifs financiers
     this.specialTags = {
-      '#urgent': 0.9,
-      '#important': 0.8,
-      '#business': 0.7,
-      '#client': 0.8,
+      '#urgent': 0.95,
+      '#important': 0.85,
+      '#business': 0.9,        // BOOST: objectif financier
+      '#client': 0.95,         // BOOST: génération revenu direct
+      '#prospect': 0.95,       // BOOST: génération leads
+      '#lead': 0.95,           // BOOST: génération leads
+      '#revenu': 1.0,          // BOOST MAXIMUM: impact financier direct
+      '#monétisation': 0.95,   // BOOST: création revenu
+      '#marketing': 0.85,      // BOOST: acquisition
       '#formation': 0.6,
       '#personnel': 0.3,
       '#optionnel': 0.2
     };
+  }
+
+  loadUserProfile() {
+    try {
+      const profilePath = path.join(__dirname, '../../data/user-profile.json');
+      if (fs.existsSync(profilePath)) {
+        const profile = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
+        logger.info('Profil utilisateur chargé avec objectifs financiers');
+        return profile;
+      }
+    } catch (error) {
+      logger.warn('Impossible de charger le profil utilisateur:', error.message);
+    }
+    return null;
   }
 
   async calculatePriorities(tasks) {
@@ -58,14 +80,71 @@ class PriorityCalculator {
     const duration = this.calculateDurationScore(task);
     const context = this.calculateContextScore(task);
 
-    const score = (
+    // NOUVEAU: Impact financier basé sur le profil utilisateur
+    const financialImpact = this.calculateFinancialImpact(task);
+
+    let score = (
       complexity * this.weights.complexityWeight +
       urgency * this.weights.urgencyWeight +
       duration * this.weights.durationWeight +
       context * this.weights.contextWeight
     );
 
+    // BOOST MASSIF si la tâche a un impact financier élevé (objectif 20k-50k/mois)
+    if (financialImpact > 0.7) {
+      score = score * 1.5; // +50% de priorité
+      logger.debug(`Tâche à fort impact financier détectée: "${task.title}" (boost x1.5)`);
+    } else if (financialImpact > 0.5) {
+      score = score * 1.25; // +25% de priorité
+    }
+
     return Math.round(score * 100) / 100; // Arrondi à 2 décimales
+  }
+
+  calculateFinancialImpact(task) {
+    if (!this.userProfile) return 0;
+
+    const text = `${task.title} ${task.content || ''}`.toLowerCase();
+    let impactScore = 0;
+
+    // Vérifier les mots-clés de croissance business (poids 0.5)
+    const businessGrowthKeywords = this.userProfile.priorityRules.businessGrowth.keywords;
+    const businessMatches = businessGrowthKeywords.filter(keyword => text.includes(keyword.toLowerCase()));
+    if (businessMatches.length > 0) {
+      impactScore = Math.max(impactScore, 0.9); // Impact très élevé
+      logger.debug(`Mots-clés business détectés: ${businessMatches.join(', ')}`);
+    }
+
+    // Vérifier les mots-clés de création de contenu (poids 0.3)
+    const contentKeywords = this.userProfile.priorityRules.contentCreation.keywords;
+    const contentMatches = contentKeywords.filter(keyword => text.includes(keyword.toLowerCase()));
+    if (contentMatches.length > 0) {
+      impactScore = Math.max(impactScore, 0.7); // Impact élevé
+    }
+
+    // Vérifier les mots-clés de développement technique (poids 0.15)
+    const techKeywords = this.userProfile.priorityRules.technicalDevelopment.keywords;
+    const techMatches = techKeywords.filter(keyword => text.includes(keyword.toLowerCase()));
+    if (techMatches.length > 0) {
+      impactScore = Math.max(impactScore, 0.5); // Impact moyen
+    }
+
+    // Détection de mentions explicites d'objectifs financiers
+    const financialKeywords = ['20k', '50k', 'revenu', 'argent', '€', 'euro', 'chiffre d\'affaires', 'ca', 'prospect', 'lead'];
+    const financialMatches = financialKeywords.filter(keyword => text.includes(keyword));
+    if (financialMatches.length > 0) {
+      impactScore = 1.0; // Impact MAXIMUM
+      logger.info(`Tâche à impact financier direct: "${task.title}"`);
+    }
+
+    // Détection des réseaux sociaux mentionnés (Instagram, Facebook, YouTube)
+    const socialKeywords = ['instagram', 'facebook', 'youtube', '@jeremy_plusdeclients', 'plus-de-clients'];
+    const socialMatches = socialKeywords.filter(keyword => text.includes(keyword));
+    if (socialMatches.length > 0) {
+      impactScore = Math.max(impactScore, 0.75); // Impact élevé pour visibilité
+    }
+
+    return impactScore;
   }
 
   calculateComplexity(task) {

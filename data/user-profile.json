@@ -1,0 +1,159 @@
+{
+  "identity": {
+    "name": "Jérémy Polizzi",
+    "brand": "Plus de Clients",
+    "tagline": "Génération de prospects qualifiés pour pros/TPE via IA"
+  },
+  "socialMedia": {
+    "instagram": "https://www.instagram.com/jeremy_plusdeclients/",
+    "facebookPersonal": "https://www.facebook.com/JerPOLIZZI",
+    "facebookBusiness": "https://www.facebook.com/Plus.de.clients.automatiquement.avec.IA/",
+    "website": "https://www.plus-de-clients.fr/",
+    "youtube": "https://www.youtube.com/@JeremyPolizzi"
+  },
+  "objectives": {
+    "financial": {
+      "monthlyTarget": 20000,
+      "stretchGoal": 50000,
+      "currency": "EUR",
+      "urgency": "HIGH",
+      "priority": "CRITICAL"
+    },
+    "business": {
+      "strategy": "Revenus en ligne diversifiés (tous domaines possibles)",
+      "legalStructure": "Micro-entreprise France (ACRE 1 an)",
+      "timeline": "Exploitation maximale ACRE pendant 1 an",
+      "futureExpat": "Philippines ou Dubaï (après ACRE)"
+    },
+    "skills": {
+      "technical": "Capacité de développement et création avancée",
+      "versatile": true,
+      "canPivot": true
+    }
+  },
+  "priorityRules": {
+    "businessGrowth": {
+      "weight": 0.5,
+      "keywords": [
+        "revenu",
+        "client",
+        "prospect",
+        "vente",
+        "lead",
+        "funnel",
+        "conversion",
+        "automatisation",
+        "growth",
+        "marketing",
+        "monétisation",
+        "business",
+        "argent",
+        "€",
+        "euro"
+      ]
+    },
+    "contentCreation": {
+      "weight": 0.3,
+      "keywords": [
+        "instagram",
+        "facebook",
+        "youtube",
+        "post",
+        "vidéo",
+        "contenu",
+        "story",
+        "reel",
+        "publication",
+        "social media"
+      ]
+    },
+    "technicalDevelopment": {
+      "weight": 0.15,
+      "keywords": [
+        "développement",
+        "code",
+        "site",
+        "landing",
+        "funnel",
+        "outil",
+        "automation",
+        "intégration",
+        "api"
+      ]
+    },
+    "administrative": {
+      "weight": 0.05,
+      "keywords": [
+        "administratif",
+        "comptabilité",
+        "déclaration",
+        "acre",
+        "urssaf",
+        "facturation"
+      ]
+    }
+  },
+  "focusAreas": [
+    {
+      "area": "Génération de leads automatisée",
+      "impact": "HIGH",
+      "revenue": "DIRECT"
+    },
+    {
+      "area": "Création de produits/services à forte marge",
+      "impact": "HIGH",
+      "revenue": "DIRECT"
+    },
+    {
+      "area": "Marketing digital et acquisition",
+      "impact": "HIGH",
+      "revenue": "DIRECT"
+    },
+    {
+      "area": "Automation et outils de productivité",
+      "impact": "MEDIUM",
+      "revenue": "INDIRECT"
+    },
+    {
+      "area": "Personal branding et visibilité",
+      "impact": "MEDIUM",
+      "revenue": "INDIRECT"
+    }
+  ],
+  "decisionCriteria": {
+    "roi": {
+      "description": "Retour sur investissement en temps",
+      "threshold": "Privilégier tâches à ROI élevé (>3x)"
+    },
+    "cashflow": {
+      "description": "Impact direct sur trésorerie",
+      "preference": "Tâches génératrices de revenus immédiats"
+    },
+    "scalability": {
+      "description": "Capacité de mise à l'échelle",
+      "preference": "Solutions automatisables et scalables"
+    },
+    "timeToMarket": {
+      "description": "Rapidité de mise en œuvre",
+      "preference": "Quick wins vs projets longs"
+    }
+  },
+  "workPreferences": {
+    "availability": {
+      "workingHours": "Variable (entrepreneur)",
+      "flexibleSchedule": true,
+      "personalLife": "Préserver soirées pour petite amie"
+    },
+    "energyLevels": {
+      "sportDays": "Matinées réservées",
+      "creativeWork": "Après-midi privilégiés",
+      "adminWork": "Slots courts dispersés"
+    }
+  },
+  "currentStatus": {
+    "phase": "Lancement intensif",
+    "urgency": "MAXIMUM",
+    "motivation": "Prospérité financière rapide avant expatriation",
+    "deadline": "Optimiser ACRE (1 an)"
+  }
+}
