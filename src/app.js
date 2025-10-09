@@ -168,6 +168,27 @@ class OrchestratorApp {
       }
     });
 
+    // Page backup/restore (protégée)
+    this.app.get('/backup', (req, res) => {
+      // Vérifier si l'utilisateur est authentifié
+      const token = req.headers.authorization?.split(' ')[1] || req.cookies?.token;
+
+      if (!token) {
+        return res.redirect('/login');
+      }
+
+      // Vérifier la validité du token
+      const jwt = require('jsonwebtoken');
+      const config = require('./config/config');
+
+      try {
+        jwt.verify(token, config.security.jwtSecret);
+        res.sendFile(path.join(__dirname, 'web/public/backup.html'));
+      } catch (error) {
+        res.redirect('/login');
+      }
+    });
+
     // Health check (public)
     this.app.get('/health', (req, res) => {
       res.json({
