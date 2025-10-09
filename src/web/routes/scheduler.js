@@ -422,4 +422,54 @@ router.get('/health', async (req, res) => {
   }
 });
 
+// === NETTOYAGE CALENDRIER ===
+
+// Lancer un nettoyage manuel du calendrier
+router.post('/cleanup', async (req, res) => {
+  try {
+    logger.info('Nettoyage manuel du calendrier déclenché via API');
+
+    const startTime = Date.now();
+    const report = await scheduler.calendarCleaner.performCleanup();
+    const duration = Date.now() - startTime;
+
+    res.json({
+      success: true,
+      message: 'Nettoyage terminé',
+      report,
+      duration,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Erreur lors du nettoyage manuel:', error.message);
+    res.status(500).json({
+      error: 'Erreur lors du nettoyage',
+      details: error.message
+    });
+  }
+});
+
+// Obtenir le rapport de santé du calendrier
+router.get('/calendar/health', async (req, res) => {
+  try {
+    const healthReport = await scheduler.calendarCleaner.generateHealthReport();
+
+    const statusCode = healthReport.isHealthy ? 200 : 503;
+
+    res.status(statusCode).json({
+      success: true,
+      health: healthReport,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Erreur lors de la génération du rapport de santé calendrier:', error.message);
+    res.status(500).json({
+      error: 'Erreur lors de la génération du rapport',
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;

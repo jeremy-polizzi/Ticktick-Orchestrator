@@ -24,6 +24,7 @@
   "author": "Jeremy Polizzi - Plus de Clients",
   "license": "MIT",
   "dependencies": {
+    "airtable": "^0.12.2",
     "axios": "^1.6.0",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",

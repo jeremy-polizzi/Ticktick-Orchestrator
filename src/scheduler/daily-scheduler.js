@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const TaskManager = require('../orchestrator/task-manager');
 const CalendarSync = require('../orchestrator/calendar-sync');
+const CalendarCleaner = require('../orchestrator/calendar-cleaner');
 const PriorityCalculator = require('../orchestrator/priority-calculator');
 const logger = require('../utils/logger');
 const config = require('../config/config');
@@ -9,6 +10,7 @@ class DailyScheduler {
   constructor() {
     this.taskManager = new TaskManager();
     this.calendarSync = new CalendarSync();
+    this.calendarCleaner = new CalendarCleaner();
     this.priorityCalculator = new PriorityCalculator();
     this.isRunning = false;
     this.scheduledJobs = new Map();
@@ -18,8 +20,9 @@ class DailyScheduler {
     try {
       await this.taskManager.initialize();
       await this.calendarSync.initialize();
+      await this.calendarCleaner.initialize();
 
-      logger.info('DailyScheduler initialisé avec succès');
+      logger.info('DailyScheduler initialisé avec succès (avec CalendarCleaner)');
       return true;
     } catch (error) {
       logger.error('Erreur lors de l\'initialisation du DailyScheduler:', error.message);
@@ -607,15 +610,45 @@ class DailyScheduler {
         }
       );
 
+      // Nettoyage automatique du calendrier (1x par jour à 22h)
+      // 🧹 Vérifie : tâches à minuit, conflits incohérents
+      const cleanupJob = cron.schedule(
+        '0 22 * * *', // Tous les jours à 22h
+        async () => {
+          try {
+            if (this.isSchedulerActive()) {
+              logger.info('🧹 Lancement du nettoyage automatique du calendrier');
+              const report = await this.calendarCleaner.performCleanup();
+
+              if (!report.isHealthy) {
+                logger.warn(`Nettoyage terminé - ${report.issues.midnightTasks} tâches à minuit, ${report.issues.overlappingTasks} conflits`);
+              } else {
+                logger.info('✅ Calendrier propre - aucun problème détecté');
+              }
+            } else {
+              logger.debug('Nettoyage ignoré : scheduler inactif');
+            }
+          } catch (error) {
+            logger.error('Erreur lors du nettoyage automatique:', error.message);
+          }
+        },
+        {
+          scheduled: false,
+          timezone: config.scheduler.timezone
+        }
+      );
+
       // Démarrer les tâches
       dailyJob.start();
       syncJob.start();
       healthJob.start();
+      cleanupJob.start();
 
       // Sauvegarder les références
       this.scheduledJobs.set('daily', dailyJob);
       this.scheduledJobs.set('sync', syncJob);
       this.scheduledJobs.set('health', healthJob);
+      this.scheduledJobs.set('cleanup', cleanupJob);
 
       logger.info('Scheduler démarré avec succès');
       logger.info(`Organisation quotidienne: tous les jours à ${config.scheduler.dailyTime}`);
