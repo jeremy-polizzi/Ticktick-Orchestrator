@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const TaskManager = require('../orchestrator/task-manager');
 const CalendarSync = require('../orchestrator/calendar-sync');
 const CalendarCleaner = require('../orchestrator/calendar-cleaner');
+const SmartOrchestrator = require('../orchestrator/smart-orchestrator');
 const PriorityCalculator = require('../orchestrator/priority-calculator');
 const logger = require('../utils/logger');
 const config = require('../config/config');
@@ -11,6 +12,7 @@ class DailyScheduler {
     this.taskManager = new TaskManager();
     this.calendarSync = new CalendarSync();
     this.calendarCleaner = new CalendarCleaner();
+    this.smartOrchestrator = new SmartOrchestrator();
     this.priorityCalculator = new PriorityCalculator();
     this.isRunning = false;
     this.scheduledJobs = new Map();
@@ -21,8 +23,9 @@ class DailyScheduler {
       await this.taskManager.initialize();
       await this.calendarSync.initialize();
       await this.calendarCleaner.initialize();
+      await this.smartOrchestrator.initialize();
 
-      logger.info('DailyScheduler initialisé avec succès (avec CalendarCleaner)');
+      logger.info('DailyScheduler initialisé avec succès (avec SmartOrchestrator)');
       return true;
     } catch (error) {
       logger.error('Erreur lors de l\'initialisation du DailyScheduler:', error.message);
@@ -56,14 +59,23 @@ class DailyScheduler {
       // 2. Synchronisation complète
       await this.calendarSync.performFullSync();
 
-      // 3. Réorganisation intelligente
+      // 3. ANALYSE INTELLIGENTE AIRTABLE + GÉNÉRATION AUTO TÂCHES
+      logger.info('🧠 Lancement analyse SmartOrchestrator');
+      const smartAnalysis = await this.smartOrchestrator.performDailyAnalysis();
+      logger.info(`✅ SmartOrchestrator: ${smartAnalysis.generatedTasks.length} tâches générées, ${smartAnalysis.suggestions.length} suggestions`);
+
+      // 4. Synchronisation tâches complétées → Airtable
+      await this.smartOrchestrator.syncCompletedTasksToAirtable();
+
+      // 5. Réorganisation intelligente
       await this.performIntelligentReorganization();
 
-      // 4. Planification des prochains jours
+      // 6. Planification des prochains jours
       await this.planUpcomingDays();
 
-      // 5. Génération du rapport quotidien
+      // 7. Génération du rapport quotidien
       const report = await this.generateDailyReport();
+      report.smartAnalysis = smartAnalysis; // Ajouter l'analyse au rapport
 
       const duration = Date.now() - startTime;
       logger.logPerformance('daily_organization', duration);
