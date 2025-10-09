@@ -32,8 +32,31 @@
     }
   },
   "priorityRules": {
+    "capNumerique": {
+      "weight": 0.45,
+      "keywords": [
+        "cap numérique",
+        "cap numerique",
+        "kap",
+        "dossier",
+        "subvention",
+        "éligibilité",
+        "eligibilité",
+        "appel",
+        "crm",
+        "whatsapp",
+        "rdv",
+        "rendez-vous",
+        "document",
+        "entrepreneur",
+        "monter dossier",
+        "suivre",
+        "relancer"
+      ],
+      "description": "Mission consultante actuelle - revenu immédiat"
+    },
     "businessGrowth": {
-      "weight": 0.5,
+      "weight": 0.35,
       "keywords": [
         "revenu",
         "client",
@@ -50,10 +73,11 @@
         "argent",
         "€",
         "euro"
-      ]
+      ],
+      "description": "Croissance Plus de Clients - revenu futur"
     },
     "contentCreation": {
-      "weight": 0.3,
+      "weight": 0.15,
       "keywords": [
         "instagram",
         "facebook",
@@ -65,10 +89,11 @@
         "reel",
         "publication",
         "social media"
-      ]
+      ],
+      "description": "Création contenu Plus de Clients - visibilité long terme"
     },
     "technicalDevelopment": {
-      "weight": 0.15,
+      "weight": 0.1,
       "keywords": [
         "développement",
         "code",
@@ -79,7 +104,8 @@
         "automation",
         "intégration",
         "api"
-      ]
+      ],
+      "description": "Développement outils - automatisation"
     },
     "administrative": {
       "weight": 0.05,
@@ -90,34 +116,47 @@
         "acre",
         "urssaf",
         "facturation"
-      ]
+      ],
+      "description": "Tâches administratives - obligatoire mais faible priorité"
     }
   },
   "focusAreas": [
     {
+      "area": "Mission Cap Numérique (premiers revenus à générer)",
+      "impact": "CRITICAL",
+      "revenue": "POTENTIAL",
+      "commission": "640€ par dossier validé (20% de 3200€)",
+      "description": "Finaliser dossiers en cours, relancer 12 documents, valider premiers dossiers = 640€ chacun"
+    },
+    {
       "area": "Génération de leads automatisée",
       "impact": "HIGH",
-      "revenue": "DIRECT"
+      "revenue": "DIRECT",
+      "description": "Construction pipeline Plus de Clients"
     },
     {
       "area": "Création de produits/services à forte marge",
       "impact": "HIGH",
-      "revenue": "DIRECT"
+      "revenue": "DIRECT",
+      "description": "Offres Plus de Clients"
     },
     {
       "area": "Marketing digital et acquisition",
       "impact": "HIGH",
-      "revenue": "DIRECT"
+      "revenue": "DIRECT",
+      "description": "Visibilité et croissance audience"
     },
     {
       "area": "Automation et outils de productivité",
       "impact": "MEDIUM",
-      "revenue": "INDIRECT"
+      "revenue": "INDIRECT",
+      "description": "Gain de temps et efficacité"
     },
     {
       "area": "Personal branding et visibilité",
       "impact": "MEDIUM",
-      "revenue": "INDIRECT"
+      "revenue": "INDIRECT",
+      "description": "Notoriété long terme"
     }
   ],
   "decisionCriteria": {
@@ -150,10 +189,62 @@
       "adminWork": "Slots courts dispersés"
     }
   },
+  "currentActivities": {
+    "capNumerique": {
+      "type": "Mission consultante (en cours - pas encore de revenus)",
+      "description": "Accompagnement entrepreneurs pour subvention Cap Numérique",
+      "commission": {
+        "taux": "20%",
+        "montantDossier": 3200,
+        "montantParDossier": 640,
+        "devise": "EUR"
+      },
+      "currentStatus": {
+        "dossiersEnCours": "Multiple en montage",
+        "documentsAttendus": 12,
+        "dossiersValides": 0,
+        "revenuGenere": 0,
+        "revenuPotentiel": "640€ par dossier validé"
+      },
+      "tasks": [
+        "Appels leads depuis CRM",
+        "Contacts WhatsApp prospects",
+        "Montage dossiers éligibilité",
+        "Suivi documents (12 en attente actuellement)",
+        "RDV planifiés dans agenda",
+        "Finaliser dossiers pour validation"
+      ],
+      "tools": ["CRM", "WhatsApp", "Google Calendar"],
+      "priority": "CRITICAL",
+      "revenue": "POTENTIAL",
+      "urgency": "Finaliser dossiers pour premiers revenus"
+    },
+    "plusDeClients": {
+      "type": "Business en préparation/lancement",
+      "description": "Génération prospects qualifiés via IA pour pros/TPE",
+      "tasks": [
+        "Création contenus Instagram/Facebook/YouTube",
+        "Développement landing pages et funnels",
+        "Automatisations marketing",
+        "Construction audience et leads"
+      ],
+      "tools": ["Instagram", "Facebook", "YouTube", "Website"],
+      "priority": "MEDIUM",
+      "revenue": "FUTURE"
+    }
+  },
   "currentStatus": {
-    "phase": "Lancement intensif",
+    "phase": "Double activité : Mission Cap Numérique (prospection) + Préparation Plus de Clients",
+    "legalStatus": "Sans emploi (pas encore micro-entreprise)",
+    "revenue": "0€ (pas encore de revenus générés)",
     "urgency": "MAXIMUM",
-    "motivation": "Prospérité financière rapide avant expatriation",
-    "deadline": "Optimiser ACRE (1 an)"
+    "motivation": "Premiers revenus urgents + Prospérité financière rapide avant expatriation",
+    "criticalNeeds": [
+      "Finaliser dossiers Cap Numérique pour premiers revenus (20% par dossier)",
+      "Relancer 12 personnes en attente de documents",
+      "Préparer systèmes Plus de Clients en parallèle"
+    ],
+    "deadline": "Créer micro-entreprise + Optimiser ACRE (1 an)",
+    "nextMilestone": "Premier dossier Cap Numérique validé = premiers revenus"
   }
 }

@@ -107,11 +107,23 @@ class PriorityCalculator {
     const text = `${task.title} ${task.content || ''}`.toLowerCase();
     let impactScore = 0;
 
-    // Vérifier les mots-clés de croissance business (poids 0.5)
+    // PRIORITÉ 1: Cap Numérique (poids 0.45 - revenu POTENTIEL IMMÉDIAT)
+    // Mission actuelle - 20% par dossier validé - 0€ généré pour l'instant
+    if (this.userProfile.priorityRules.capNumerique) {
+      const capKeywords = this.userProfile.priorityRules.capNumerique.keywords;
+      const capMatches = capKeywords.filter(keyword => text.includes(keyword.toLowerCase()));
+      if (capMatches.length > 0) {
+        impactScore = 1.0; // Impact MAXIMUM - revenu immédiat si dossier validé
+        logger.info(`🔥 Tâche Cap Numérique détectée (revenu potentiel immédiat): "${task.title}"`);
+        logger.debug(`Keywords Cap Numérique: ${capMatches.join(', ')}`);
+      }
+    }
+
+    // Vérifier les mots-clés de croissance business (poids 0.35)
     const businessGrowthKeywords = this.userProfile.priorityRules.businessGrowth.keywords;
     const businessMatches = businessGrowthKeywords.filter(keyword => text.includes(keyword.toLowerCase()));
     if (businessMatches.length > 0) {
-      impactScore = Math.max(impactScore, 0.9); // Impact très élevé
+      impactScore = Math.max(impactScore, 0.85); // Impact très élevé (réduit car Plus de Clients = futur)
       logger.debug(`Mots-clés business détectés: ${businessMatches.join(', ')}`);
     }
 
