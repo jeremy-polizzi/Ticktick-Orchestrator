@@ -253,7 +253,7 @@ class OrchestratorApp {
         logger.info(`📋 API: http://127.0.0.1:${port}/api`);
         logger.info(`🔧 Environnement: ${config.server.env}`);
         logger.info(`🔒 SSL géré par Nginx (reverse proxy)`);
-        logger.info(`🌍 Accès public: https://vps.plus-de-clients.fr`);
+        logger.info(`🌍 Accès public: https://orchestrator.plus-de-clients.fr`);
       });
 
       // Gestion propre de l'arrêt
