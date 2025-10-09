@@ -3,6 +3,7 @@ const TaskManager = require('../orchestrator/task-manager');
 const CalendarSync = require('../orchestrator/calendar-sync');
 const CalendarCleaner = require('../orchestrator/calendar-cleaner');
 const SmartOrchestrator = require('../orchestrator/smart-orchestrator');
+const BackupManager = require('../orchestrator/backup-manager');
 const PriorityCalculator = require('../orchestrator/priority-calculator');
 const logger = require('../utils/logger');
 const config = require('../config/config');
@@ -13,6 +14,7 @@ class DailyScheduler {
     this.calendarSync = new CalendarSync();
     this.calendarCleaner = new CalendarCleaner();
     this.smartOrchestrator = new SmartOrchestrator();
+    this.backupManager = new BackupManager();
     this.priorityCalculator = new PriorityCalculator();
     this.isRunning = false;
     this.scheduledJobs = new Map();
@@ -24,8 +26,9 @@ class DailyScheduler {
       await this.calendarSync.initialize();
       await this.calendarCleaner.initialize();
       await this.smartOrchestrator.initialize();
+      await this.backupManager.initialize();
 
-      logger.info('DailyScheduler initialisé avec succès (avec SmartOrchestrator)');
+      logger.info('DailyScheduler initialisé avec succès (avec SmartOrchestrator et BackupManager)');
       return true;
     } catch (error) {
       logger.error('Erreur lors de l\'initialisation du DailyScheduler:', error.message);
@@ -58,6 +61,15 @@ class DailyScheduler {
 
       // 2. Synchronisation complète
       await this.calendarSync.performFullSync();
+
+      // 2.5. SNAPSHOT DE SÉCURITÉ avant opérations automatiques
+      logger.info('📸 Création snapshot de sécurité avant analyse intelligente');
+      const snapshot = await this.backupManager.createSnapshot('pre_daily_analysis');
+      if (snapshot.success) {
+        logger.info(`✅ Snapshot créé: ${snapshot.snapshotId} (${snapshot.snapshot.metadata.calendarEventsCount} événements, ${snapshot.snapshot.metadata.ticktickTasksCount} tâches)`);
+      } else {
+        logger.warn('⚠️ Échec création snapshot, mais poursuite de l\'analyse');
+      }
 
       // 3. ANALYSE INTELLIGENTE AIRTABLE + GÉNÉRATION AUTO TÂCHES
       logger.info('🧠 Lancement analyse SmartOrchestrator');

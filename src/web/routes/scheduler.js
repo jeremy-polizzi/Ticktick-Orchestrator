@@ -473,3 +473,4 @@ router.get('/calendar/health', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.scheduler = scheduler;

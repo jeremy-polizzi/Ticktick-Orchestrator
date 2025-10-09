@@ -15,8 +15,10 @@ const authRoutes = require('./web/routes/auth');
 const taskRoutes = require('./web/routes/tasks');
 const calendarRoutes = require('./web/routes/calendar');
 const schedulerRoutes = require('./web/routes/scheduler');
+const { scheduler } = require('./web/routes/scheduler');
 const dashboardRoutes = require('./web/routes/dashboard');
 const commandsRoutes = require('./web/routes/commands');
+const backupRoutes = require('./web/routes/backup');
 const apiRoutes = require('./web/routes/api');
 
 // Middleware d'authentification
@@ -28,6 +30,14 @@ class OrchestratorApp {
     this.setupMiddleware();
     this.setupRoutes();
     this.setupErrorHandling();
+
+    // Rendre le scheduler et backupManager accessibles aux routes
+    if (scheduler) {
+      this.app.set('scheduler', scheduler);
+      if (scheduler.backupManager) {
+        this.app.set('backupManager', scheduler.backupManager);
+      }
+    }
   }
 
   setupMiddleware() {
@@ -188,6 +198,7 @@ class OrchestratorApp {
     this.app.use('/api/scheduler', authenticateToken, schedulerRoutes);
     this.app.use('/api/dashboard', authenticateToken, dashboardRoutes);
     this.app.use('/api/commands', authenticateToken, commandsRoutes);
+    this.app.use('/api/backup', authenticateToken, backupRoutes);
     this.app.use('/api', authenticateToken, apiRoutes);
 
     // Route catch-all - rediriger vers login
