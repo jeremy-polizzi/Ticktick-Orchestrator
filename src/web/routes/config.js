@@ -69,7 +69,10 @@ router.post('/save', async (req, res) => {
       jeremyCalendarId,
       businessCalendarId,
       jwtSecret,
-      adminPassword
+      adminPassword,
+      dailyTime,
+      syncInterval,
+      maxDailyTasks
     } = req.body;
 
     // Lire le fichier .env actuel
@@ -116,6 +119,17 @@ router.post('/save', async (req, res) => {
       envContent = updateEnvVar(envContent, 'ADMIN_PASSWORD', adminPassword);
     }
 
+    // Paramètres du scheduler
+    if (dailyTime) {
+      envContent = updateEnvVar(envContent, 'DAILY_SCHEDULER_TIME', dailyTime);
+    }
+    if (syncInterval !== undefined && syncInterval !== null) {
+      envContent = updateEnvVar(envContent, 'SYNC_INTERVAL_MINUTES', syncInterval.toString());
+    }
+    if (maxDailyTasks !== undefined && maxDailyTasks !== null) {
+      envContent = updateEnvVar(envContent, 'MAX_DAILY_TASKS', maxDailyTasks.toString());
+    }
+
     // Sauvegarder le fichier
     await fs.writeFile(CONFIG_FILE, envContent.trim() + '\n');
 
@@ -130,25 +144,57 @@ router.post('/save', async (req, res) => {
 
     logger.info('Configuration rechargée en mémoire');
 
-    // Notification de redémarrage automatique
-    logger.info('⚡ Redémarrage automatique du serveur pour appliquer les changements OAuth...');
+    // Mettre à jour le scheduler si disponible
+    const scheduler = req.app.get('scheduler');
+    const schedulerParamsChanged = dailyTime || syncInterval !== undefined || maxDailyTasks !== undefined;
+    const oauthParamsChanged = ticktickClientId || ticktickClientSecret || googleClientId || googleClientSecret;
 
-    res.json({
-      success: true,
-      message: 'Configuration sauvegardée. Redémarrage automatique en cours...',
-      willRestart: true
-    });
+    if (scheduler && schedulerParamsChanged) {
+      // Arrêter les jobs actuels
+      const wasRunning = scheduler.scheduledJobs && scheduler.scheduledJobs.size > 0;
+      if (wasRunning) {
+        scheduler.stopScheduler();
+        logger.info('Scheduler arrêté pour mise à jour paramètres');
+      }
 
-    // Redémarrer après 2 secondes pour laisser le temps à la réponse
-    setTimeout(() => {
-      const { exec } = require('child_process');
-      const restartScript = path.join(__dirname, '../../../restart.sh');
-      exec(restartScript, (error) => {
-        if (error) {
-          logger.error('Erreur redémarrage:', error);
-        }
+      // Redémarrer avec les nouvelles valeurs (automatiquement via config rechargé)
+      setTimeout(() => {
+        scheduler.startScheduler();
+        logger.info(`✅ Scheduler redémarré avec nouveaux paramètres: dailyTime=${newConfig.scheduler.dailyTime}, syncInterval=${newConfig.scheduler.syncInterval}min, maxDailyTasks=${newConfig.scheduler.maxDailyTasks}`);
+      }, 500);
+    }
+
+    // Redémarrage serveur uniquement si credentials OAuth modifiés
+    if (oauthParamsChanged) {
+      logger.info('⚡ Redémarrage automatique du serveur pour appliquer les changements OAuth...');
+
+      res.json({
+        success: true,
+        message: 'Configuration sauvegardée. Redémarrage automatique en cours pour appliquer les credentials OAuth...',
+        willRestart: true
       });
-    }, 2000);
+
+      // Redémarrer après 2 secondes pour laisser le temps à la réponse
+      setTimeout(() => {
+        const { exec } = require('child_process');
+        const restartScript = path.join(__dirname, '../../../restart.sh');
+        exec(restartScript, (error) => {
+          if (error) {
+            logger.error('Erreur redémarrage:', error);
+          }
+        });
+      }, 2000);
+    } else {
+      // Pas de redémarrage nécessaire, juste confirmation
+      res.json({
+        success: true,
+        message: schedulerParamsChanged
+          ? 'Paramètres du scheduler sauvegardés et appliqués immédiatement'
+          : 'Configuration sauvegardée avec succès',
+        willRestart: false,
+        schedulerRestarted: schedulerParamsChanged
+      });
+    }
 
   } catch (error) {
     logger.error('Erreur sauvegarde configuration:', error);

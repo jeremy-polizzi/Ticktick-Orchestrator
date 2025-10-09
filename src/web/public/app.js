@@ -843,13 +843,27 @@ class OrchestratorApp {
                 formData.adminPassword = newPassword;
             }
 
-            await this.apiCall('/api/config/save', 'POST', formData);
+            const result = await this.apiCall('/api/config/save', 'POST', formData);
 
-            this.showAlert('Paramètres sauvegardés avec succès', 'success');
+            // Message selon le type de changement
+            if (result.schedulerRestarted) {
+                this.showAlert('✅ Paramètres du scheduler sauvegardés et appliqués immédiatement', 'success');
+            } else if (result.willRestart) {
+                this.showAlert('⚡ Configuration sauvegardée. Redémarrage serveur en cours...', 'warning');
+            } else {
+                this.showAlert('✅ Configuration sauvegardée avec succès', 'success');
+            }
 
             // Fermer la modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('configModal'));
             modal.hide();
+
+            // Rafraîchir le statut si le scheduler a été modifié
+            if (result.schedulerRestarted) {
+                setTimeout(() => {
+                    this.refreshScheduler();
+                }, 1000);
+            }
 
         } catch (error) {
             console.error('Erreur sauvegarde config:', error);
