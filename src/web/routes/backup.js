@@ -222,4 +222,39 @@ router.delete('/:snapshotId', async (req, res) => {
   }
 });
 
+/**
+ * Récupérer l'historique des actions backup/restore
+ * GET /api/backup/history
+ */
+router.get('/history', async (req, res) => {
+  try {
+    const backupManager = req.app.get('backupManager');
+
+    if (!backupManager) {
+      return res.status(503).json({
+        success: false,
+        error: 'BackupManager non disponible'
+      });
+    }
+
+    const limit = parseInt(req.query.limit) || 50;
+    const history = backupManager.getHistory(limit);
+
+    res.json({
+      success: true,
+      history,
+      count: history.length,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Erreur lors de la récupération de l\'historique:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération de l\'historique',
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;

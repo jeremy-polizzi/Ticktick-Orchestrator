@@ -566,6 +566,9 @@ class OrchestratorApp {
             case 'scheduler':
                 await this.loadScheduler();
                 break;
+            case 'backup':
+                await this.loadBackup();
+                break;
         }
     }
 
@@ -697,6 +700,304 @@ class OrchestratorApp {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // === BACKUP TAB ===
+
+    async loadBackup() {
+        console.log('Loading backup tab...');
+        await Promise.all([
+            this.loadChaosLevel(),
+            this.loadBackupHistory(),
+            this.loadSnapshots()
+        ]);
+        this.setupBackupHandlers();
+    }
+
+    async loadChaosLevel() {
+        try {
+            const response = await this.apiCall('/api/backup/chaos-check');
+            const chaos = response.chaos;
+
+            document.getElementById('chaosLevel').textContent = `${chaos.level}/100`;
+            document.getElementById('chaosEventsTotal').textContent = chaos.issues.totalEvents;
+            document.getElementById('chaosEventsMidnight').textContent = chaos.issues.eventsAtMidnight;
+            document.getElementById('chaosOverlapping').textContent = chaos.issues.overlappingEvents;
+
+            const chaosCard = document.getElementById('chaosCard');
+            const recommendation = document.getElementById('chaosRecommendation');
+
+            if (chaos.detected) {
+                chaosCard.classList.add('border-danger');
+                chaosCard.classList.remove('border-success');
+                recommendation.className = 'alert alert-danger mb-3';
+                recommendation.innerHTML = `<i class="bi bi-exclamation-triangle"></i> ${chaos.recommendation}`;
+            } else {
+                chaosCard.classList.add('border-success');
+                chaosCard.classList.remove('border-danger');
+                recommendation.className = 'alert alert-success mb-3';
+                recommendation.innerHTML = `<i class="bi bi-check-circle"></i> ${chaos.recommendation}`;
+            }
+
+        } catch (error) {
+            console.error('Erreur chargement chaos:', error);
+        }
+    }
+
+    async loadBackupHistory() {
+        try {
+            const response = await this.apiCall('/api/backup/history?limit=10');
+            const history = response.history;
+
+            const historyContainer = document.getElementById('backupHistory');
+
+            if (!history || history.length === 0) {
+                historyContainer.innerHTML = '<div class="text-center text-muted py-3">Aucun historique disponible</div>';
+                return;
+            }
+
+            const actionIcons = {
+                'snapshot_created': '<i class="bi bi-camera text-success"></i>',
+                'snapshot_restored': '<i class="bi bi-arrow-counterclockwise text-warning"></i>',
+                'snapshot_deleted': '<i class="bi bi-trash text-danger"></i>'
+            };
+
+            const actionLabels = {
+                'snapshot_created': 'Snapshot créé',
+                'snapshot_restored': 'Snapshot restauré',
+                'snapshot_deleted': 'Snapshot supprimé'
+            };
+
+            historyContainer.innerHTML = history.map(entry => {
+                const date = new Date(entry.timestamp);
+                const dateStr = date.toLocaleString('fr-FR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                const counters = entry.counters;
+                const hasCounters = counters.calendarCreated > 0 || counters.calendarDeleted > 0 ||
+                                   counters.ticktickCreated > 0 || counters.ticktickDeleted > 0;
+
+                return `
+                    <div class="border-bottom pb-3 mb-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <div class="mb-1">
+                                    ${actionIcons[entry.action] || '<i class="bi bi-info-circle"></i>'}
+                                    <strong>${actionLabels[entry.action] || entry.action}</strong>
+                                    <span class="text-muted small ms-2">${dateStr}</span>
+                                </div>
+                                ${entry.details.reason ? `<div class="small text-muted mb-2"><i class="bi bi-tag"></i> ${entry.details.reason}</div>` : ''}
+                                ${hasCounters ? `
+                                    <div class="row g-2 mt-2">
+                                        ${counters.calendarCreated > 0 ? `
+                                            <div class="col-auto">
+                                                <span class="badge bg-success">
+                                                    <i class="bi bi-calendar-plus"></i> ${counters.calendarCreated} créé${counters.calendarCreated > 1 ? 's' : ''}
+                                                </span>
+                                            </div>
+                                        ` : ''}
+                                        ${counters.calendarDeleted > 0 ? `
+                                            <div class="col-auto">
+                                                <span class="badge bg-danger">
+                                                    <i class="bi bi-calendar-x"></i> ${counters.calendarDeleted} supprimé${counters.calendarDeleted > 1 ? 's' : ''}
+                                                </span>
+                                            </div>
+                                        ` : ''}
+                                        ${counters.ticktickCreated > 0 ? `
+                                            <div class="col-auto">
+                                                <span class="badge bg-success">
+                                                    <i class="bi bi-check2-circle"></i> ${counters.ticktickCreated} tâche${counters.ticktickCreated > 1 ? 's' : ''} créée${counters.ticktickCreated > 1 ? 's' : ''}
+                                                </span>
+                                            </div>
+                                        ` : ''}
+                                        ${counters.ticktickDeleted > 0 ? `
+                                            <div class="col-auto">
+                                                <span class="badge bg-danger">
+                                                    <i class="bi bi-x-circle"></i> ${counters.ticktickDeleted} tâche${counters.ticktickDeleted > 1 ? 's' : ''} supprimée${counters.ticktickDeleted > 1 ? 's' : ''}
+                                                </span>
+                                            </div>
+                                        ` : ''}
+                                        ${counters.totalEvents > 0 ? `
+                                            <div class="col-auto">
+                                                <span class="badge bg-info">
+                                                    <i class="bi bi-calendar-event"></i> ${counters.totalEvents} événement${counters.totalEvents > 1 ? 's' : ''}
+                                                </span>
+                                            </div>
+                                        ` : ''}
+                                        ${counters.totalTasks > 0 ? `
+                                            <div class="col-auto">
+                                                <span class="badge bg-info">
+                                                    <i class="bi bi-list-task"></i> ${counters.totalTasks} tâche${counters.totalTasks > 1 ? 's' : ''}
+                                                </span>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+        } catch (error) {
+            console.error('Erreur chargement historique:', error);
+            document.getElementById('backupHistory').innerHTML = '<div class="alert alert-danger">Erreur lors du chargement de l\'historique</div>';
+        }
+    }
+
+    async loadSnapshots() {
+        try {
+            const response = await this.apiCall('/api/backup/list');
+            const snapshots = response.snapshots;
+
+            const snapshotList = document.getElementById('snapshotList');
+
+            if (!snapshots || snapshots.length === 0) {
+                snapshotList.innerHTML = '<div class="text-center text-muted py-3">Aucun snapshot disponible</div>';
+                return;
+            }
+
+            snapshotList.innerHTML = snapshots.map(snapshot => {
+                const date = new Date(snapshot.timestamp);
+                const dateStr = date.toLocaleString('fr-FR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                return `
+                    <div class="border-bottom pb-3 mb-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <div class="mb-1">
+                                    <strong><i class="bi bi-archive"></i> ${snapshot.id}</strong>
+                                    <span class="text-muted small ms-2">${dateStr}</span>
+                                </div>
+                                <div class="small text-muted mb-2">
+                                    <i class="bi bi-tag"></i> ${snapshot.reason}
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-auto">
+                                        <span class="badge bg-primary">
+                                            <i class="bi bi-calendar-event"></i> ${snapshot.calendarEventsCount} événements
+                                        </span>
+                                    </div>
+                                    <div class="col-auto">
+                                        <span class="badge bg-primary">
+                                            <i class="bi bi-list-task"></i> ${snapshot.ticktickTasksCount} tâches
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-warning" onclick="app.restoreSnapshot('${snapshot.id}')">
+                                    <i class="bi bi-arrow-counterclockwise"></i> Restaurer
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="app.deleteSnapshot('${snapshot.id}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+        } catch (error) {
+            console.error('Erreur chargement snapshots:', error);
+            document.getElementById('snapshotList').innerHTML = '<div class="alert alert-danger">Erreur lors du chargement des snapshots</div>';
+        }
+    }
+
+    setupBackupHandlers() {
+        const createBtn = document.getElementById('createSnapshotBtn');
+        if (createBtn && !createBtn.dataset.listenerAdded) {
+            createBtn.addEventListener('click', async () => {
+                await this.createSnapshot();
+            });
+            createBtn.dataset.listenerAdded = 'true';
+        }
+    }
+
+    async createSnapshot() {
+        const reasonInput = document.getElementById('snapshotReason');
+        const reason = reasonInput.value.trim() || 'manual';
+        const btn = document.getElementById('createSnapshotBtn');
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Création...';
+
+        try {
+            const response = await this.apiCall('/api/backup/snapshot', 'POST', { reason });
+
+            if (response.success) {
+                this.showAlert(`✅ Snapshot créé: ${response.snapshot.calendarEvents} événements, ${response.snapshot.ticktickTasks} tâches`, 'success');
+                reasonInput.value = '';
+                await this.loadSnapshots();
+                await this.loadBackupHistory();
+            } else {
+                this.showAlert(`❌ Erreur: ${response.error}`, 'danger');
+            }
+        } catch (error) {
+            this.showAlert(`❌ Erreur: ${error.message}`, 'danger');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-camera"></i> Créer Snapshot';
+        }
+    }
+
+    async restoreSnapshot(snapshotId) {
+        if (!confirm(`⚠️ Confirmer la restauration depuis ${snapshotId}?\n\nCela va:\n- Créer un snapshot de sécurité\n- Supprimer les événements/tâches non présents dans le snapshot\n- Recréer les événements/tâches du snapshot`)) {
+            return;
+        }
+
+        this.showAlert('🔄 Restauration en cours...', 'warning');
+        this.showLoading();
+
+        try {
+            const response = await this.apiCall(`/api/backup/restore/${snapshotId}`, 'POST');
+
+            if (response.success) {
+                const cal = response.restored.calendar;
+                const tick = response.restored.ticktick;
+                this.showAlert(`✅ Restauration réussie!\n\nCalendar: ${cal.created} créés, ${cal.deleted} supprimés\nTickTick: ${tick.created} créés, ${tick.deleted} supprimés\n\nSnapshot sécurité: ${response.preRestoreSnapshot}`, 'success');
+                await this.loadSnapshots();
+                await this.loadBackupHistory();
+                await this.loadChaosLevel();
+            } else {
+                this.showAlert(`❌ Erreur: ${response.error}`, 'danger');
+            }
+        } catch (error) {
+            this.showAlert(`❌ Erreur: ${error.message}`, 'danger');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async deleteSnapshot(snapshotId) {
+        if (!confirm(`Supprimer le snapshot ${snapshotId}?`)) {
+            return;
+        }
+
+        try {
+            const response = await this.apiCall(`/api/backup/${snapshotId}`, 'DELETE');
+
+            if (response.success) {
+                this.showAlert('✅ Snapshot supprimé', 'success');
+                await this.loadSnapshots();
+                await this.loadBackupHistory();
+            } else {
+                this.showAlert(`❌ Erreur: ${response.error}`, 'danger');
+            }
+        } catch (error) {
+            this.showAlert(`❌ Erreur: ${error.message}`, 'danger');
+        }
     }
 
     // === MODALS ===

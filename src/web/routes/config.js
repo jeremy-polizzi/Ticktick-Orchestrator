@@ -136,9 +136,18 @@ router.post('/save', async (req, res) => {
     logger.info('Configuration sauvegardée avec succès');
 
     // Recharger immédiatement la configuration en mémoire
-    // 1. FORCER dotenv à relire le fichier .env
-    delete require.cache[require.resolve('dotenv')];
-    require('dotenv').config({ path: CONFIG_FILE, override: true });
+    // 1. Mettre à jour DIRECTEMENT process.env (dotenv.config override ne marche pas toujours)
+    if (dailyTime) process.env.DAILY_SCHEDULER_TIME = dailyTime;
+    if (syncInterval !== undefined) process.env.SYNC_INTERVAL_MINUTES = syncInterval.toString();
+    if (maxDailyTasks !== undefined) process.env.MAX_DAILY_TASKS = maxDailyTasks.toString();
+    if (jeremyCalendarId) process.env.JEREMY_CALENDAR_ID = jeremyCalendarId;
+    if (businessCalendarId) process.env.BUSINESS_CALENDAR_ID = businessCalendarId;
+    if (ticktickClientId) process.env.TICKTICK_CLIENT_ID = ticktickClientId;
+    if (ticktickClientSecret) process.env.TICKTICK_CLIENT_SECRET = ticktickClientSecret;
+    if (googleClientId) process.env.GOOGLE_CLIENT_ID = googleClientId;
+    if (googleClientSecret) process.env.GOOGLE_CLIENT_SECRET = googleClientSecret;
+    if (jwtSecret) process.env.JWT_SECRET = jwtSecret;
+    if (adminPassword) process.env.ADMIN_PASSWORD = adminPassword;
 
     // 2. Purger le cache du module config
     delete require.cache[require.resolve('../../config/config')];
@@ -147,7 +156,7 @@ router.post('/save', async (req, res) => {
     // 3. Mettre à jour l'objet config actif
     Object.assign(config, newConfig);
 
-    logger.info(`Configuration rechargée en mémoire - scheduler: ${newConfig.scheduler.dailyTime}, ${newConfig.scheduler.syncInterval}min, ${newConfig.scheduler.maxDailyTasks} tâches/jour`);
+    logger.info(`✅ Configuration rechargée en mémoire - scheduler: ${newConfig.scheduler.dailyTime}, ${newConfig.scheduler.syncInterval}min, ${newConfig.scheduler.maxDailyTasks} tâches/jour`);
 
     // Mettre à jour le scheduler si disponible
     const scheduler = req.app.get('scheduler');

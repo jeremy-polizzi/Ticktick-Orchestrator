@@ -260,21 +260,12 @@
 
   <script>
     const API_BASE = '/api/backup';
-    let token = localStorage.getItem('token') || getCookie('token');
 
-    function getCookie(name) {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop().split(';').shift();
-    }
-
-    // Authentification
-    if (!token) {
-      window.location.href = '/login';
-    }
+    // Pas besoin de vérifier le token côté client
+    // La route /backup est déjà protégée côté serveur
+    // Les cookies httpOnly sont envoyés automatiquement avec credentials: 'include'
 
     const headers = {
-      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     };
 
@@ -323,7 +314,10 @@
     // Charger niveau de chaos
     async function loadChaosLevel() {
       try {
-        const response = await fetch(`${API_BASE}/chaos-check`, { headers });
+        const response = await fetch(`${API_BASE}/chaos-check`, {
+          headers,
+          credentials: 'include'
+        });
         const data = await response.json();
 
         if (data.success) {
@@ -358,7 +352,10 @@
     // Charger liste snapshots
     async function loadSnapshots() {
       try {
-        const response = await fetch(`${API_BASE}/list`, { headers });
+        const response = await fetch(`${API_BASE}/list`, {
+          headers,
+          credentials: 'include'
+        });
         const data = await response.json();
 
         const listEl = document.getElementById('snapshotList');
@@ -420,6 +417,7 @@
         const response = await fetch(`${API_BASE}/snapshot`, {
           method: 'POST',
           headers,
+          credentials: 'include',
           body: JSON.stringify({ reason })
         });
 
@@ -451,7 +449,8 @@
       try {
         const response = await fetch(`${API_BASE}/restore/${snapshotId}`, {
           method: 'POST',
-          headers
+          headers,
+          credentials: 'include'
         });
 
         const data = await response.json();
@@ -479,7 +478,8 @@
       try {
         const response = await fetch(`${API_BASE}/${snapshotId}`, {
           method: 'DELETE',
-          headers
+          headers,
+          credentials: 'include'
         });
 
         const data = await response.json();

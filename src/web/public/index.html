@@ -339,9 +339,6 @@
                             <li><a class="dropdown-item" href="#" onclick="showConfigModal()">
                                 <i class="bi bi-sliders"></i> Paramètres
                             </a></li>
-                            <li><a class="dropdown-item" href="/backup">
-                                <i class="bi bi-shield-check"></i> Backup/Restore
-                            </a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="#" onclick="logout()">
                                 <i class="bi bi-box-arrow-right"></i> Déconnexion
@@ -399,6 +396,11 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="scheduler-tab" data-bs-toggle="tab" data-bs-target="#scheduler" type="button">
                     <i class="bi bi-clock"></i> Planificateur
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="backup-tab" data-bs-toggle="tab" data-bs-target="#backup" type="button">
+                    <i class="bi bi-shield-check"></i> Backup
                 </button>
             </li>
         </ul>
@@ -664,6 +666,109 @@
                             <div class="text-center py-3">
                                 <div class="spinner-grow spinner-grow-sm text-primary"></div>
                                 <span class="ms-2">Chargement de l'activité...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Backup Tab -->
+            <div class="tab-pane fade" id="backup" role="tabpanel">
+                <div class="mb-4 p-3 rounded border" style="background-color: #e7f3ff !important; border-color: #b6d4fe !important; color: #004085 !important;">
+                    <h6 class="mb-2" style="color: #004085 !important;"><i class="bi bi-shield-check"></i> Backup & Restore</h6>
+                    <p class="mb-0 small" style="color: #004085 !important;">Créez des snapshots de votre agenda et tâches pour revenir en arrière en cas de problème. Chaque action est tracée avec des compteurs détaillés.</p>
+                </div>
+
+                <!-- Indicateur de chaos -->
+                <div class="card mb-4" id="chaosCard">
+                    <div class="card-header" style="border-bottom: 2px solid var(--primary-color);">
+                        <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Détection de Chaos</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 text-center">
+                                <div style="font-size: 48px; font-weight: bold; color: var(--primary-color);" id="chaosLevel">--</div>
+                                <div class="text-muted">Niveau de chaos</div>
+                            </div>
+                            <div class="col-md-9">
+                                <div id="chaosRecommendation" class="alert alert-info mb-3">
+                                    <i class="bi bi-info-circle"></i> Analyse en cours...
+                                </div>
+                                <div id="chaosIssues" class="row g-3">
+                                    <div class="col-md-4">
+                                        <div class="card bg-dark border-secondary">
+                                            <div class="card-body text-center">
+                                                <div class="h4 text-primary" id="chaosEventsTotal">--</div>
+                                                <div class="small text-muted">Événements totaux</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="card bg-dark border-secondary">
+                                            <div class="card-body text-center">
+                                                <div class="h4 text-warning" id="chaosEventsMidnight">--</div>
+                                                <div class="small text-muted">Événements minuit</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="card bg-dark border-secondary">
+                                            <div class="card-body text-center">
+                                                <div class="h4 text-danger" id="chaosOverlapping">--</div>
+                                                <div class="small text-muted">Chevauchements</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Créer snapshot -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-camera"></i> Créer un Snapshot</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <input type="text" class="form-control" id="snapshotReason" placeholder="Raison du snapshot (ex: avant_modification_planning)">
+                            </div>
+                            <div class="col-md-4">
+                                <button class="btn btn-success w-100" id="createSnapshotBtn">
+                                    <i class="bi bi-camera"></i> Créer Snapshot
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Historique des actions -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-clock-history"></i> Historique des Actions</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="backupHistory">
+                            <div class="text-center py-3">
+                                <div class="spinner-grow spinner-grow-sm text-primary"></div>
+                                <span class="ms-2">Chargement de l'historique...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Liste des snapshots -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-archive"></i> Snapshots Disponibles</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="snapshotList">
+                            <div class="text-center py-3">
+                                <div class="spinner-grow spinner-grow-sm text-primary"></div>
+                                <span class="ms-2">Chargement des snapshots...</span>
                             </div>
                         </div>
                     </div>

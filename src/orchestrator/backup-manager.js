@@ -16,11 +16,18 @@ class BackupManager {
     this.ticktick = new TickTickAPI();
 
     this.backupDir = path.join(__dirname, '../../data/backups');
+    this.historyFile = path.join(__dirname, '../../data/backup-history.json');
     this.maxBackups = 30; // Garder 30 jours
+    this.maxHistoryEntries = 100; // Garder 100 dernières actions
 
     // S'assurer que le répertoire existe
     if (!fs.existsSync(this.backupDir)) {
       fs.mkdirSync(this.backupDir, { recursive: true });
+    }
+
+    // Initialiser l'historique
+    if (!fs.existsSync(this.historyFile)) {
+      fs.writeFileSync(this.historyFile, JSON.stringify([], null, 2));
     }
   }
 
@@ -76,6 +83,15 @@ class BackupManager {
       await this.cleanOldBackups();
 
       logger.info(`✅ Snapshot créé: ${snapshotId} (${snapshot.metadata.calendarEventsCount} événements, ${snapshot.metadata.ticktickTasksCount} tâches)`);
+
+      // Ajouter à l'historique
+      this.addHistoryEntry('snapshot_created', {
+        snapshotId,
+        reason,
+        totalEvents: snapshot.metadata.calendarEventsCount,
+        totalTasks: snapshot.metadata.ticktickTasksCount,
+        duration: snapshot.metadata.duration
+      });
 
       return {
         success: true,
@@ -194,6 +210,17 @@ class BackupManager {
       const duration = Date.now() - startTime;
 
       logger.info(`✅ Restauration terminée en ${duration}ms`);
+
+      // Ajouter à l'historique
+      this.addHistoryEntry('snapshot_restored', {
+        snapshotId,
+        preRestoreSnapshotId: preRestoreSnapshot.snapshotId,
+        calendarCreated: calendarRestored.created,
+        calendarDeleted: calendarRestored.deleted,
+        ticktickCreated: ticktickRestored.created,
+        ticktickDeleted: ticktickRestored.deleted,
+        duration
+      });
 
       return {
         success: true,
@@ -410,8 +437,20 @@ class BackupManager {
       const snapshotPath = path.join(this.backupDir, `${snapshotId}.json`);
 
       if (fs.existsSync(snapshotPath)) {
+        // Charger snapshot avant suppression pour logger les compteurs
+        const snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+
         fs.unlinkSync(snapshotPath);
         logger.info(`Snapshot supprimé: ${snapshotId}`);
+
+        // Ajouter à l'historique
+        this.addHistoryEntry('snapshot_deleted', {
+          snapshotId,
+          reason: snapshot.reason,
+          totalEvents: snapshot.metadata?.calendarEventsCount || 0,
+          totalTasks: snapshot.metadata?.ticktickTasksCount || 0
+        });
+
         return true;
       }
 
@@ -513,6 +552,70 @@ class BackupManager {
     }
 
     return Math.min(100, score);
+  }
+
+  // === HISTORIQUE DES ACTIONS ===
+
+  addHistoryEntry(action, details = {}) {
+    try {
+      const history = this.getHistory();
+
+      const entry = {
+        id: `action_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        action,
+        details,
+        counters: {
+          calendarCreated: details.calendarCreated || 0,
+          calendarDeleted: details.calendarDeleted || 0,
+          ticktickCreated: details.ticktickCreated || 0,
+          ticktickDeleted: details.ticktickDeleted || 0,
+          totalEvents: details.totalEvents || 0,
+          totalTasks: details.totalTasks || 0
+        }
+      };
+
+      history.unshift(entry); // Ajouter au début
+
+      // Limiter à maxHistoryEntries
+      if (history.length > this.maxHistoryEntries) {
+        history.splice(this.maxHistoryEntries);
+      }
+
+      fs.writeFileSync(this.historyFile, JSON.stringify(history, null, 2));
+      logger.debug(`Historique mis à jour: ${action}`);
+
+    } catch (error) {
+      logger.error('Erreur ajout historique:', error.message);
+    }
+  }
+
+  getHistory(limit = 50) {
+    try {
+      if (!fs.existsSync(this.historyFile)) {
+        return [];
+      }
+
+      const historyData = fs.readFileSync(this.historyFile, 'utf8');
+      const history = JSON.parse(historyData);
+
+      return history.slice(0, limit);
+
+    } catch (error) {
+      logger.error('Erreur lecture historique:', error.message);
+      return [];
+    }
+  }
+
+  clearHistory() {
+    try {
+      fs.writeFileSync(this.historyFile, JSON.stringify([], null, 2));
+      logger.info('Historique effacé');
+      return true;
+    } catch (error) {
+      logger.error('Erreur effacement historique:', error.message);
+      return false;
+    }
   }
 }
 
