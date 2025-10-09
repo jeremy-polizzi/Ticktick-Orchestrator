@@ -136,13 +136,18 @@ router.post('/save', async (req, res) => {
     logger.info('Configuration sauvegardée avec succès');
 
     // Recharger immédiatement la configuration en mémoire
+    // 1. FORCER dotenv à relire le fichier .env
+    delete require.cache[require.resolve('dotenv')];
+    require('dotenv').config({ path: CONFIG_FILE, override: true });
+
+    // 2. Purger le cache du module config
     delete require.cache[require.resolve('../../config/config')];
     const newConfig = require('../../config/config');
 
-    // Mettre à jour l'objet config actif
+    // 3. Mettre à jour l'objet config actif
     Object.assign(config, newConfig);
 
-    logger.info('Configuration rechargée en mémoire');
+    logger.info(`Configuration rechargée en mémoire - scheduler: ${newConfig.scheduler.dailyTime}, ${newConfig.scheduler.syncInterval}min, ${newConfig.scheduler.maxDailyTasks} tâches/jour`);
 
     // Mettre à jour le scheduler si disponible
     const scheduler = req.app.get('scheduler');

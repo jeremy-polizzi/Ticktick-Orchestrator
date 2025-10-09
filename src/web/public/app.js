@@ -579,23 +579,109 @@ class OrchestratorApp {
     // === UTILITIES ===
 
     showAlert(message, type = 'info') {
-        // Créer une alerte temporaire
-        const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-        alertDiv.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        // Créer container de toasts si n'existe pas
+        let toastContainer = document.getElementById('toastContainer');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toastContainer';
+            toastContainer.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                z-index: 9999;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                max-width: 350px;
+            `;
+            document.body.appendChild(toastContainer);
+        }
+
+        // Mapping types Bootstrap vers couleurs mode sombre
+        const colors = {
+            'success': { bg: '#1a4d2e', border: '#28a745', icon: '✓' },
+            'danger': { bg: '#4d1a1a', border: '#dc3545', icon: '✕' },
+            'warning': { bg: '#4d3d1a', border: '#ffc107', icon: '⚠' },
+            'info': { bg: '#1a2d4d', border: '#17a2b8', icon: 'ℹ' }
+        };
+
+        const color = colors[type] || colors['info'];
+
+        // Créer toast compact
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            background: ${color.bg};
+            border-left: 4px solid ${color.border};
+            color: #fff;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideIn 0.3s ease-out;
+            max-width: 350px;
         `;
 
-        // Insérer au début du container
-        const container = document.querySelector('.container');
-        container.insertBefore(alertDiv, container.firstChild);
+        toast.innerHTML = `
+            <span style="font-size: 16px; font-weight: bold;">${color.icon}</span>
+            <span style="flex: 1;">${message}</span>
+            <button onclick="this.parentElement.remove()" style="
+                background: none;
+                border: none;
+                color: #fff;
+                cursor: pointer;
+                opacity: 0.7;
+                font-size: 18px;
+                padding: 0;
+                width: 20px;
+                height: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            ">×</button>
+        `;
 
-        // Auto-remove après 5 secondes
+        // Ajouter animation CSS
+        if (!document.getElementById('toastAnimations')) {
+            const style = document.createElement('style');
+            style.id = 'toastAnimations';
+            style.textContent = `
+                @keyframes slideIn {
+                    from {
+                        transform: translateX(400px);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translateX(0);
+                        opacity: 1;
+                    }
+                }
+                @keyframes slideOut {
+                    from {
+                        transform: translateX(0);
+                        opacity: 1;
+                    }
+                    to {
+                        transform: translateX(400px);
+                        opacity: 0;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        toastContainer.appendChild(toast);
+
+        // Auto-remove après 5 secondes avec animation
         setTimeout(() => {
-            if (alertDiv.parentNode) {
-                alertDiv.remove();
-            }
+            toast.style.animation = 'slideOut 0.3s ease-in';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 300);
         }, 5000);
     }
 
