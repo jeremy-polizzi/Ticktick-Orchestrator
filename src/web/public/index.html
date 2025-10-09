@@ -656,10 +656,29 @@
                     </div>
                 </div>
 
-                <!-- Recent Activity -->
+                <!-- Activité en temps réel -->
+                <div class="card mb-4" id="currentActivityCard">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0"><i class="bi bi-activity"></i> Activité en Temps Réel</h6>
+                            <span id="activityRefreshIndicator" class="badge bg-secondary">
+                                <i class="bi bi-circle-fill" style="font-size: 8px;"></i> En veille
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="currentActivity">
+                            <div class="text-center text-muted py-3">
+                                <i class="bi bi-hourglass-split"></i> Aucune activité en cours
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Historique activité récente -->
                 <div class="card">
                     <div class="card-header">
-                        <h6 class="mb-0">Activité Récente</h6>
+                        <h6 class="mb-0"><i class="bi bi-clock-history"></i> Activités Récentes</h6>
                     </div>
                     <div class="card-body">
                         <div id="schedulerActivity">

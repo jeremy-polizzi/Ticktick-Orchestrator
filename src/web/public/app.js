@@ -469,11 +469,114 @@ class OrchestratorApp {
                     new Date(status.status.lastRun).toLocaleString('fr-FR') : '-';
             }
 
-            // Charger l'activité récente
+            // Charger l'activité en temps réel
+            await this.loadCurrentActivity();
             await this.loadSchedulerActivity();
+
+            // Démarrer le polling pour l'activité en temps réel (toutes les 2 secondes)
+            this.startActivityPolling();
 
         } catch (error) {
             console.error('Error loading scheduler:', error);
+        }
+    }
+
+    startActivityPolling() {
+        // Nettoyer l'intervalle précédent s'il existe
+        if (this.activityPollingInterval) {
+            clearInterval(this.activityPollingInterval);
+        }
+
+        // Poll toutes les 2 secondes quand on est sur l'onglet scheduler
+        this.activityPollingInterval = setInterval(async () => {
+            const activeTab = document.querySelector('.tab-pane.active');
+            if (activeTab && activeTab.id === 'scheduler') {
+                await this.loadCurrentActivity();
+            }
+        }, 2000);
+    }
+
+    async loadCurrentActivity() {
+        try {
+            const response = await this.apiCall('/api/scheduler/activity');
+            const activity = response.activity;
+
+            const currentActivityEl = document.getElementById('currentActivity');
+            const indicatorEl = document.getElementById('activityRefreshIndicator');
+
+            if (activity.hasActiveActivity && activity.currentActivity) {
+                const act = activity.currentActivity;
+                const progress = act.progress || 0;
+                const elapsedSeconds = Math.floor(act.elapsedTime / 1000);
+                const estimatedRemaining = act.estimatedTimeRemaining ?
+                    Math.floor(act.estimatedTimeRemaining / 1000) : null;
+
+                // Mettre à jour l'indicateur
+                indicatorEl.className = 'badge bg-success';
+                indicatorEl.innerHTML = '<i class="bi bi-circle-fill" style="font-size: 8px; animation: pulse 1s infinite;"></i> En cours';
+
+                // Afficher l'activité courante
+                currentActivityEl.innerHTML = `
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <strong>${act.description}</strong>
+                                <div class="small text-muted">${act.type}</div>
+                            </div>
+                            <span class="badge bg-primary">${progress}%</span>
+                        </div>
+                        <div class="progress mb-2" style="height: 8px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                 role="progressbar"
+                                 style="width: ${progress}%"
+                                 aria-valuenow="${progress}"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100"></div>
+                        </div>
+                        <div class="small text-muted">
+                            <i class="bi bi-clock"></i> Écoulé: ${elapsedSeconds}s
+                            ${estimatedRemaining ? `• Restant: ~${estimatedRemaining}s` : ''}
+                        </div>
+                    </div>
+
+                    ${act.currentStep ? `
+                        <div class="border-top pt-3">
+                            <div class="small mb-2"><strong>Étape actuelle:</strong></div>
+                            <div class="d-flex align-items-center">
+                                <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                                <span>${act.currentStep}</span>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${act.steps && act.steps.length > 0 ? `
+                        <div class="border-top pt-3 mt-3">
+                            <div class="small mb-2"><strong>Étapes:</strong></div>
+                            ${act.steps.map((step, idx) => `
+                                <div class="d-flex align-items-start mb-1">
+                                    ${step.status === 'completed' ? '<i class="bi bi-check-circle text-success me-2"></i>' :
+                                      step.status === 'failed' ? '<i class="bi bi-x-circle text-danger me-2"></i>' :
+                                      '<div class="spinner-border spinner-border-sm text-primary me-2" style="width: 14px; height: 14px;"></div>'}
+                                    <span class="small ${step.status === 'completed' ? 'text-muted' : ''}">${idx + 1}. ${step.name}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                `;
+            } else {
+                // Aucune activité en cours
+                indicatorEl.className = 'badge bg-secondary';
+                indicatorEl.innerHTML = '<i class="bi bi-circle-fill" style="font-size: 8px;"></i> En veille';
+
+                currentActivityEl.innerHTML = `
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-hourglass-split"></i> Aucune activité en cours
+                    </div>
+                `;
+            }
+
+        } catch (error) {
+            console.error('Error loading current activity:', error);
         }
     }
 
@@ -481,13 +584,66 @@ class OrchestratorApp {
         const activityContainer = document.getElementById('schedulerActivity');
 
         try {
-            activityContainer.innerHTML = `
-                <div class="text-muted">
-                    <p>L'historique des exécutions apparaîtra ici.</p>
-                </div>
-            `;
+            const response = await this.apiCall('/api/scheduler/activity/history?limit=10');
+
+            if (!response.success || !response.history || response.history.length === 0) {
+                activityContainer.innerHTML = `
+                    <div class="text-center text-muted py-3">
+                        Aucune activité récente
+                    </div>
+                `;
+                return;
+            }
+
+            activityContainer.innerHTML = response.history.map(activity => {
+                const date = new Date(activity.startTime);
+                const dateStr = date.toLocaleString('fr-FR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                const durationSeconds = Math.floor(activity.duration / 1000);
+                const statusBadge = activity.status === 'success' ?
+                    '<span class="badge bg-success">✓ Réussi</span>' :
+                    '<span class="badge bg-danger">✗ Échoué</span>';
+
+                return `
+                    <div class="border-bottom pb-3 mb-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <div class="mb-1">
+                                    <strong>${activity.description}</strong>
+                                    ${statusBadge}
+                                </div>
+                                <div class="small text-muted">
+                                    <i class="bi bi-clock"></i> ${dateStr}
+                                    • Durée: ${durationSeconds}s
+                                    ${activity.steps ? `• ${activity.steps.length} étapes` : ''}
+                                </div>
+                                ${activity.result && Object.keys(activity.result).length > 0 ? `
+                                    <div class="mt-2">
+                                        ${Object.entries(activity.result).map(([key, value]) => `
+                                            <span class="badge bg-info me-1">
+                                                ${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}
+                                            </span>
+                                        `).join('')}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
         } catch (error) {
             console.error('Error loading scheduler activity:', error);
+            activityContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    Erreur lors du chargement de l'historique
+                </div>
+            `;
         }
     }
 

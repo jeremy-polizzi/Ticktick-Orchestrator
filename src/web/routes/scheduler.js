@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const DailyScheduler = require('../../scheduler/daily-scheduler');
+const { getInstance: getActivityTracker } = require('../../orchestrator/activity-tracker');
 const logger = require('../../utils/logger');
 
 // Instance du scheduler
@@ -417,6 +418,73 @@ router.get('/health', async (req, res) => {
     logger.error('Erreur lors de la vérification de santé:', error.message);
     res.status(500).json({
       error: 'Erreur lors de la vérification de santé',
+      details: error.message
+    });
+  }
+});
+
+// === ACTIVITÉ EN TEMPS RÉEL ===
+
+// Obtenir l'état de l'activité en cours
+router.get('/activity', (req, res) => {
+  try {
+    const tracker = getActivityTracker();
+    const state = tracker.getCurrentState();
+
+    res.json({
+      success: true,
+      activity: state,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Erreur lors de la récupération de l\'activité:', error.message);
+    res.status(500).json({
+      error: 'Erreur lors de la récupération de l\'activité',
+      details: error.message
+    });
+  }
+});
+
+// Obtenir l'historique des activités
+router.get('/activity/history', (req, res) => {
+  try {
+    const tracker = getActivityTracker();
+    const { limit = 20 } = req.query;
+    const history = tracker.getHistory(parseInt(limit));
+
+    res.json({
+      success: true,
+      history,
+      count: history.length,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Erreur lors de la récupération de l\'historique d\'activité:', error.message);
+    res.status(500).json({
+      error: 'Erreur lors de la récupération de l\'historique',
+      details: error.message
+    });
+  }
+});
+
+// Obtenir les statistiques d'activité
+router.get('/activity/stats', (req, res) => {
+  try {
+    const tracker = getActivityTracker();
+    const stats = tracker.getStats();
+
+    res.json({
+      success: true,
+      stats,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Erreur lors de la récupération des stats d\'activité:', error.message);
+    res.status(500).json({
+      error: 'Erreur lors de la récupération des stats',
       details: error.message
     });
   }

@@ -1,5 +1,6 @@
 const GoogleCalendarAPI = require('../api/google-calendar-api');
 const TickTickAPI = require('../api/ticktick-api');
+const { getInstance: getActivityTracker } = require('./activity-tracker');
 const logger = require('../utils/logger');
 const config = require('../config/config');
 
@@ -28,33 +29,61 @@ class CalendarSync {
   // === SYNCHRONISATION BIDIRECTIONNELLE ===
 
   async performFullSync() {
+    const tracker = getActivityTracker();
+
     try {
       logger.info('Début de la synchronisation complète');
+
+      // Démarrer tracking
+      tracker.startActivity('full_sync', 'Synchronisation complète Calendar', {
+        totalSteps: 4
+      });
 
       const startTime = Date.now();
 
       // 1. Synchroniser TickTick vers Google Calendar
+      tracker.addStep('sync_ticktick_to_google', 'Synchronisation TickTick → Google Calendar');
       await this.syncTickTickToGoogle();
+      tracker.completeStep();
+      tracker.updateProgress(25);
 
       // 2. Synchroniser Google Calendar vers TickTick (si configuré)
       // await this.syncGoogleToTickTick();
 
       // 3. Résoudre les conflits
+      tracker.addStep('resolve_conflicts', 'Résolution des conflits');
       await this.resolveConflicts();
+      tracker.completeStep();
+      tracker.updateProgress(50);
 
       // 4. Nettoyer les orphelins
+      tracker.addStep('cleanup_orphans', 'Nettoyage des orphelins');
       await this.cleanupOrphans();
+      tracker.completeStep();
+      tracker.updateProgress(75);
 
       const duration = Date.now() - startTime;
       logger.logPerformance('full_sync', duration);
 
       this.lastSyncTime = new Date();
+
+      tracker.addStep('save_sync_map', 'Sauvegarde mapping synchronisation');
       await this.saveSyncMap();
+      tracker.completeStep();
+      tracker.updateProgress(100);
 
       logger.info(`Synchronisation complète terminée en ${duration}ms`);
+
+      tracker.endActivity('success', {
+        duration,
+        lastSyncTime: this.lastSyncTime.toISOString()
+      });
+
       return true;
     } catch (error) {
       logger.error('Erreur lors de la synchronisation complète:', error.message);
+      tracker.failStep(error);
+      tracker.endActivity('failed', { error: error.message });
       throw error;
     }
   }

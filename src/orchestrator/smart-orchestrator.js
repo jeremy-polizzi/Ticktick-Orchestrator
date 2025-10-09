@@ -2,6 +2,7 @@ const AirtableAPI = require('../api/airtable-api');
 const TickTickAPI = require('../api/ticktick-api');
 const GoogleCalendarAPI = require('../api/google-calendar-api');
 const PriorityCalculator = require('./priority-calculator');
+const { getInstance: getActivityTracker } = require('./activity-tracker');
 const logger = require('../utils/logger');
 const config = require('../config/config');
 
@@ -48,28 +49,53 @@ class SmartOrchestrator {
   // === ANALYSE AUTOMATIQUE QUOTIDIENNE ===
 
   async performDailyAnalysis() {
+    const tracker = getActivityTracker();
+
     try {
       logger.info('🧠 Début de l\'analyse intelligente quotidienne');
+
+      // Démarrer tracking
+      tracker.startActivity('daily_analysis', 'Analyse intelligente quotidienne', {
+        totalSteps: 6
+      });
 
       const startTime = Date.now();
 
       // 1. Analyser Airtable
+      tracker.addStep('analyze_airtable', 'Analyse des données Airtable CRM');
       const airtableData = await this.analyzeAirtable();
+      tracker.completeStep({ records: airtableData.totalRecords });
+      tracker.updateProgress(16);
 
       // 2. Détecter actions requises
+      tracker.addStep('detect_actions', 'Détection des actions requises');
       const actions = await this.detectRequiredActions(airtableData);
+      tracker.completeStep({ actionsDetected: actions.length });
+      tracker.updateProgress(33);
 
       // 3. Générer tâches TickTick automatiquement
+      tracker.addStep('generate_tasks', 'Génération automatique des tâches TickTick');
       const generatedTasks = await this.generateAutomaticTasks(actions);
+      tracker.completeStep({ tasksGenerated: generatedTasks.length });
+      tracker.updateProgress(50);
 
       // 4. Bloquer créneaux dans Google Calendar
+      tracker.addStep('block_calendar', 'Blocage des créneaux Google Calendar');
       const blockedSlots = await this.blockCalendarSlots(actions);
+      tracker.completeStep({ slotsBlocked: blockedSlots.length });
+      tracker.updateProgress(66);
 
       // 5. Calculer progression objectif
+      tracker.addStep('calculate_progress', 'Calcul progression objectif mensuel');
       const progression = this.calculateObjectiveProgress(airtableData);
+      tracker.completeStep({ progression: `${progression.percentage}%` });
+      tracker.updateProgress(83);
 
       // 6. Générer suggestions proactives
+      tracker.addStep('generate_suggestions', 'Génération suggestions proactives');
       const suggestions = await this.generateProactiveSuggestions(airtableData, progression);
+      tracker.completeStep({ suggestionsCount: suggestions.length });
+      tracker.updateProgress(100);
 
       const duration = Date.now() - startTime;
 
@@ -86,10 +112,19 @@ class SmartOrchestrator {
 
       logger.info(`✅ Analyse terminée en ${duration}ms - ${generatedTasks.length} tâches générées, ${suggestions.length} suggestions`);
 
+      // Terminer tracking
+      tracker.endActivity('success', {
+        tasksGenerated: generatedTasks.length,
+        suggestionsGenerated: suggestions.length,
+        objectiveProgress: progression.percentage
+      });
+
       return this.lastAnalysis;
 
     } catch (error) {
       logger.error('Erreur lors de l\'analyse quotidienne:', error.message);
+      tracker.failStep(error);
+      tracker.endActivity('failed', { error: error.message });
       throw error;
     }
   }
