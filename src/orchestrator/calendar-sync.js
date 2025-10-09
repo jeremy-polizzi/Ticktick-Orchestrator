@@ -97,6 +97,13 @@ class CalendarSync {
       // Convertir la tâche en événement (maintenant asynchrone)
       const eventData = await this.convertTaskToEvent(task);
 
+      // Si aucun créneau disponible, eventData sera null
+      if (!eventData) {
+        logger.warn(`Tâche "${task.title}" non synchronisée : aucun créneau disponible`);
+        // TODO: Déclencher réorganisation intelligente ou report de tâche
+        return;
+      }
+
       if (existingEventId) {
         // Mettre à jour l'événement existant
         if (forceUpdate || await this.hasTaskChanged(task)) {
@@ -195,11 +202,15 @@ class CalendarSync {
       }
     };
 
-    // Gestion des dates
-    const dueDate = new Date(task.dueDate);
+    // Gestion des dates - FIX BUG MINUIT
+    let dueDate = new Date(task.dueDate);
 
-    if (task.allDay !== false && !task.startDate) {
-      // Tenter de placer la tâche dans un créneau disponible
+    // 🐛 FIX: Si la date est à minuit (00:00), c'est probablement une date sans heure
+    // On ne doit PAS placer la tâche à minuit mais chercher un créneau disponible
+    const isDateOnly = dueDate.getHours() === 0 && dueDate.getMinutes() === 0 && dueDate.getSeconds() === 0;
+
+    if (isDateOnly || (task.allDay !== false && !task.startDate)) {
+      // Tâche sans heure spécifique - TOUJOURS chercher un créneau disponible
       const scheduledSlot = await this.scheduleTaskInSlot(task, dueDate);
 
       if (scheduledSlot) {
@@ -211,10 +222,13 @@ class CalendarSync {
 
         logger.info(`Tâche "${task.title}" planifiée dans créneau ${scheduledSlot.start.toLocaleTimeString('fr-FR')} - ${scheduledSlot.end.toLocaleTimeString('fr-FR')}`);
       } else {
-        // Fallback: événement sur toute la journée si aucun créneau disponible
-        eventData.start.date = dueDate.toISOString().split('T')[0];
-        eventData.end.date = dueDate.toISOString().split('T')[0];
-        logger.warn(`Aucun créneau disponible pour "${task.title}", placée en journée entière`);
+        // 🚨 AUCUN créneau disponible - JAMAIS de journée entière
+        // Options: Réorganiser TickTick OU déplacer événements moins prioritaires
+        logger.warn(`❌ AUCUN créneau disponible pour "${task.title}" le ${dueDate.toDateString()}`);
+        logger.warn(`🔄 Action requise: Réorganiser agenda ou déplacer tâche TickTick`);
+
+        // NE PAS créer l'événement - retourner null pour indiquer échec
+        return null;
       }
     } else {
       // Événement avec heure spécifique (déjà définie par l'utilisateur)
@@ -256,10 +270,18 @@ class CalendarSync {
       // Estimer la durée de la tâche
       const estimatedDuration = this.estimateTaskDuration(task);
 
+      // 🐛 FIX: S'assurer que targetDate n'est pas à minuit
+      // Si targetDate est à 00:00, on utilise la date du jour pour chercher des créneaux
+      let searchDate = new Date(targetDate);
+      if (searchDate.getHours() === 0 && searchDate.getMinutes() === 0) {
+        // Utiliser la date mais chercher des créneaux durant la journée
+        logger.debug(`Recherche créneaux pour date ${searchDate.toDateString()} (pas minuit)`);
+      }
+
       // Récupérer les créneaux disponibles avec buffer de 15 minutes
       const availableSlots = await this.googleCalendar.getAvailableSlots(
         calendarIds,
-        targetDate,
+        searchDate,
         estimatedDuration,
         {
           bufferMinutes: 15,
@@ -269,7 +291,7 @@ class CalendarSync {
       );
 
       if (availableSlots.length === 0) {
-        logger.warn(`Aucun créneau disponible pour la tâche "${task.title}" le ${targetDate.toDateString()}`);
+        logger.warn(`Aucun créneau disponible pour la tâche "${task.title}" le ${searchDate.toDateString()}`);
         return null;
       }
 

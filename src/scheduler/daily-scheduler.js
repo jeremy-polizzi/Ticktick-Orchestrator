@@ -564,12 +564,19 @@ class DailyScheduler {
       );
 
       // Synchronisation régulière (toutes les 30 minutes selon config)
+      // 🔒 UNIQUEMENT si scheduler actif ET pas en cours d'organisation
       const syncJob = cron.schedule(
         `*/${config.scheduler.syncInterval} * * * *`,
         async () => {
           try {
-            if (!this.isRunning) { // Éviter les conflits avec l'organisation quotidienne
+            // Vérifier que le scheduler est ACTIF et PAS en cours d'organisation
+            if (this.isSchedulerActive() && !this.isRunning) {
+              logger.info('Synchronisation automatique (scheduler actif)');
               await this.calendarSync.performFullSync();
+            } else if (!this.isSchedulerActive()) {
+              logger.debug('Synchronisation ignorée : scheduler inactif');
+            } else {
+              logger.debug('Synchronisation ignorée : organisation en cours');
             }
           } catch (error) {
             logger.error('Erreur lors de la synchronisation automatique:', error.message);
@@ -781,9 +788,15 @@ class DailyScheduler {
 
   // === UTILITÉS ===
 
+  isSchedulerActive() {
+    // Vérifier si le scheduler est vraiment actif (avec des jobs planifiés)
+    return this.scheduledJobs.size > 0;
+  }
+
   getSchedulerStatus() {
     return {
       isRunning: this.isRunning,
+      isActive: this.isSchedulerActive(),
       scheduledJobs: Array.from(this.scheduledJobs.keys()),
       lastRun: this.lastRunTime,
       nextRun: this.getNextRunTime(),
