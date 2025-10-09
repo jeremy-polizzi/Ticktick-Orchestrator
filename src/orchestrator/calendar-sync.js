@@ -63,11 +63,31 @@ class CalendarSync {
     try {
       logger.info('Synchronisation TickTick → Google Calendar');
 
+      // SÉCURITÉ CRITIQUE: Vérifier que TickTick fonctionne AVANT de toucher Google Calendar
+      const ticktickHealth = await this.ticktick.healthCheck();
+
+      if (!ticktickHealth.healthy) {
+        logger.error(`❌ SYNCHRONISATION BLOQUÉE: TickTick n'est pas opérationnel`);
+        logger.error(`   Raison: ${ticktickHealth.reason}`);
+        logger.error(`   Message: ${ticktickHealth.message}`);
+        throw new Error(`TickTick non opérationnel: ${ticktickHealth.message}`);
+      }
+
+      logger.info(`✅ TickTick health check OK (${ticktickHealth.projectsCount} projets, ${ticktickHealth.responseTime}ms)`);
+
       // Récupérer toutes les tâches non complétées avec dates
       const tasks = await this.ticktick.getTasks();
+
+      if (!tasks || tasks.length === 0) {
+        logger.warn('⚠️ SYNCHRONISATION ARRÊTÉE: TickTick n\'a retourné aucune tâche');
+        logger.warn('   Cela peut indiquer un problème avec l\'API TickTick');
+        logger.warn('   Aucun événement Google Calendar ne sera créé pour éviter les incohérences');
+        return;
+      }
+
       const tasksWithDates = tasks.filter(task => task.dueDate);
 
-      logger.info(`${tasksWithDates.length} tâches à synchroniser`);
+      logger.info(`${tasksWithDates.length} tâches à synchroniser (${tasks.length} total)`);
 
       for (const task of tasksWithDates) {
         await this.syncTaskToCalendar(task);

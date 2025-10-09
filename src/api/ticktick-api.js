@@ -547,6 +547,55 @@ class TickTickAPI {
       return false;
     }
   }
+  // Vérifications de santé
+
+  async hasValidTokens() {
+    return !!(this.accessToken && this.refreshToken);
+  }
+
+  async healthCheck() {
+    try {
+      if (!this.accessToken) {
+        logger.warn('TickTick health check: pas de token d\'accès');
+        return {
+          healthy: false,
+          reason: 'no_access_token',
+          message: 'Authentification TickTick requise'
+        };
+      }
+
+      // Tester en récupérant les projets (endpoint léger)
+      const startTime = Date.now();
+      const projects = await this.getProjects();
+      const responseTime = Date.now() - startTime;
+
+      if (!projects || projects.length === 0) {
+        logger.warn('TickTick health check: aucun projet trouvé');
+        return {
+          healthy: false,
+          reason: 'no_projects',
+          message: 'Aucun projet TickTick accessible',
+          responseTime
+        };
+      }
+
+      logger.info(`TickTick health check: OK (${projects.length} projets, ${responseTime}ms)`);
+      return {
+        healthy: true,
+        projectsCount: projects.length,
+        responseTime
+      };
+
+    } catch (error) {
+      logger.error('TickTick health check: ÉCHEC', error.message);
+      return {
+        healthy: false,
+        reason: 'api_error',
+        message: error.message,
+        error: error.response?.data || error.message
+      };
+    }
+  }
 }
 
 module.exports = TickTickAPI;
