@@ -403,16 +403,35 @@ class IntelligentScheduler {
       const tasksWithoutDate = changedTasks.filter(t => !t.dueDate && !t.isCompleted && t.status !== 2);
       let datesAssigned = 0;
 
+      logger.info(`📅 ${tasksWithoutDate.length} tâches sans date trouvées`);
+
+      // Calculer charge par jour UNE SEULE FOIS (optimisation performance)
+      const loadByDay = await this.calculateLoadByDay(changedTasks);
+
       for (const task of tasksWithoutDate) {
         const priority = this.deducePriorityFromTask(task);
-        const bestDate = await this.findLeastLoadedDay(priority);
+        const bestDate = this.selectLeastLoadedDay(priority, loadByDay);
 
         if (bestDate) {
-          await this.ticktick.updateTask(task.id, { dueDate: bestDate });
-          datesAssigned++;
-          logger.info(`📅 Date attribuée: "${task.title}" → ${bestDate}`);
+          // Mise à jour avec retry si erreur
+          try {
+            await this.ticktick.updateTask(task.id, { dueDate: bestDate });
+            datesAssigned++;
+
+            // Incrémenter charge ce jour (pour prochain assignement)
+            loadByDay[bestDate] = (loadByDay[bestDate] || 0) + 1;
+
+            if (datesAssigned <= 5 || datesAssigned % 10 === 0) {
+              logger.info(`📅 Date attribuée (${datesAssigned}/${tasksWithoutDate.length}): "${task.title.substring(0, 50)}..." → ${bestDate}`);
+            }
+          } catch (error) {
+            logger.error(`Erreur attribution date tâche ${task.id}:`, error.message);
+            // Continue avec les autres tâches au lieu de crasher
+          }
         }
       }
+
+      logger.info(`✅ Attribution dates terminée: ${datesAssigned}/${tasksWithoutDate.length} tâches`);
 
       tracker.completeStep({ tasksWithoutDate: tasksWithoutDate.length, datesAssigned });
       tracker.updateProgress(40);
@@ -522,55 +541,66 @@ class IntelligentScheduler {
     }
   }
 
-  async findLeastLoadedDay(priority) {
-    // Chercher sur 60 jours le jour le moins chargé
-    const allTasks = await this.ticktick.getTasks();
+  async calculateLoadByDay(allTasks) {
+    // Calculer charge par jour UNE SEULE FOIS pour performance
     const today = new Date();
-
     const loadByDay = {};
 
-    // Calculer charge par jour
+    // Initialiser tous les jours à 0
     for (let i = 0; i < 60; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
       const dateStr = date.toISOString().split('T')[0];
-
-      const tasksThisDay = allTasks.filter(t => {
-        if (!t.dueDate || t.isCompleted || t.status === 2) return false;
-        const tDate = t.dueDate.split('T')[0];
-        return tDate === dateStr;
-      });
-
-      loadByDay[dateStr] = tasksThisDay.length;
+      loadByDay[dateStr] = 0;
     }
+
+    // Compter tâches par jour
+    for (const task of allTasks) {
+      if (!task.dueDate || task.isCompleted || task.status === 2) continue;
+
+      const taskDate = task.dueDate.split('T')[0];
+      if (loadByDay.hasOwnProperty(taskDate)) {
+        loadByDay[taskDate]++;
+      }
+    }
+
+    return loadByDay;
+  }
+
+  selectLeastLoadedDay(priority, loadByDay) {
+    // Sélectionner jour avec le moins de charge (sans refaire getTasks)
+    const today = new Date();
 
     // Trouver jours avec ≤2 tâches (pour ne pas dépasser 3 après ajout)
     const availableDays = Object.entries(loadByDay)
       .filter(([date, count]) => count <= 2)
       .sort((a, b) => a[1] - b[1]); // Trier par charge croissante
 
-    if (availableDays.length > 0) {
-      // P1 CRITICAL: premier jour disponible
-      if (priority.value === 1) {
-        return availableDays[0][0];
-      }
-
-      // P2 HIGH: dans les 7 premiers jours
-      if (priority.value === 2) {
-        const firstWeek = availableDays.filter(([date]) => {
-          const d = new Date(date);
-          const diff = Math.floor((d - today) / (1000 * 60 * 60 * 24));
-          return diff <= 7;
-        });
-        return firstWeek.length > 0 ? firstWeek[0][0] : availableDays[0][0];
-      }
-
-      // P3/P4: répartir plus loin
-      const midIndex = Math.floor(availableDays.length / 2);
-      return availableDays[midIndex][0];
+    if (availableDays.length === 0) {
+      // Tous les jours pleins, prendre le moins chargé quand même
+      const leastLoaded = Object.entries(loadByDay)
+        .sort((a, b) => a[1] - b[1]);
+      return leastLoaded.length > 0 ? leastLoaded[0][0] : null;
     }
 
-    return null;
+    // P1 CRITICAL: premier jour disponible
+    if (priority.value === 1) {
+      return availableDays[0][0];
+    }
+
+    // P2 HIGH: dans les 7 premiers jours
+    if (priority.value === 2) {
+      const firstWeek = availableDays.filter(([date]) => {
+        const d = new Date(date);
+        const diff = Math.floor((d - today) / (1000 * 60 * 60 * 24));
+        return diff <= 7;
+      });
+      return firstWeek.length > 0 ? firstWeek[0][0] : availableDays[0][0];
+    }
+
+    // P3/P4: répartir plus loin
+    const midIndex = Math.floor(availableDays.length / 2);
+    return availableDays[midIndex][0];
   }
 
   deducePriorityFromTask(task) {
