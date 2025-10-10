@@ -428,8 +428,8 @@ class IntelligentScheduler {
               logger.info(`📅 Date attribuée (${datesAssigned}/${tasksWithoutDate.length}): "${task.title.substring(0, 50)}..." → ${bestDate}`);
             }
 
-            // Délai 100ms entre chaque update pour éviter rate limiting
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Délai 300ms entre chaque update pour éviter rate limiting TickTick
+            await new Promise(resolve => setTimeout(resolve, 300));
 
           } catch (error) {
             logger.error(`Erreur attribution date tâche ${task.id}:`, error.message);
@@ -457,16 +457,16 @@ class IntelligentScheduler {
       // Step 3: Détection jours surchargés dans TickTick
       tracker.addStep('conflict_detection', '⚠️ Détection jours surchargés TickTick (>3 tâches)');
 
-      // Recalculer loadByDay après assignation des dates (utiliser allTasks mis à jour)
-      const updatedAllTasks = await this.ticktick.getTasks();
-      const updatedLoadByDay = await this.calculateLoadByDay(updatedAllTasks);
+      // Utiliser loadByDay déjà mis à jour localement (évite getTasks() pour rate limiting)
+      // loadByDay a été incrémenté après chaque assignation réussie
+      logger.info('📊 Utilisation cache loadByDay (évite rate limiting TickTick)');
 
       let rescheduled = 0;
       let conflictsDetected = 0;
       const tasksToReschedule = [];
 
       for (const task of changedTasks) {
-        if (this.needsReschedule(task, updatedLoadByDay)) {
+        if (this.needsReschedule(task, loadByDay)) {
           conflictsDetected++;
           tasksToReschedule.push(task);
         }
@@ -490,8 +490,8 @@ class IntelligentScheduler {
 
           logger.info(`🔄 [${i + 1}/${tasksToReschedule.length}] Replanifié: "${task.title}" de ${oldDate} → nouvelle date`);
 
-          // Délai 100ms entre chaque reschedule pour éviter rate limiting
-          await new Promise(resolve => setTimeout(resolve, 100));
+          // Délai 300ms entre chaque reschedule pour éviter rate limiting TickTick
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
 
         tracker.completeStep({ rescheduled });
