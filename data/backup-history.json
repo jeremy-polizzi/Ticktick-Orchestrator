@@ -1,5 +1,25 @@
 [
   {
+    "id": "action_1760019521064",
+    "timestamp": "2025-10-09T14:18:41.064Z",
+    "action": "snapshot_created",
+    "details": {
+      "snapshotId": "snapshot_1760019515255",
+      "reason": "pre_daily_analysis",
+      "totalEvents": 246,
+      "totalTasks": 162,
+      "duration": 5777
+    },
+    "counters": {
+      "calendarCreated": 0,
+      "calendarDeleted": 0,
+      "ticktickCreated": 0,
+      "ticktickDeleted": 0,
+      "totalEvents": 246,
+      "totalTasks": 162
+    }
+  },
+  {
     "id": "action_1760017737024",
     "timestamp": "2025-10-09T13:48:57.024Z",
     "action": "snapshot_created",

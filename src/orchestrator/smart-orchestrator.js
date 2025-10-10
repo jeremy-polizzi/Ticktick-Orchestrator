@@ -73,10 +73,15 @@ class SmartOrchestrator {
       tracker.completeStep({ actionsDetected: actions.length });
       tracker.updateProgress(33);
 
-      // 3. Générer tâches TickTick automatiquement
-      tracker.addStep('generate_tasks', 'Génération automatique des tâches TickTick');
+      // 3. 🎯 TICKTICK: Génération automatique des tâches
+      tracker.addStep('generate_tasks_ticktick', '🎯 TICKTICK: Génération automatique des tâches');
+      logger.info('🎯 Début génération tâches dans TickTick...');
       const generatedTasks = await this.generateAutomaticTasks(actions);
-      tracker.completeStep({ tasksGenerated: generatedTasks.length });
+      tracker.completeStep({
+        tasksGenerated: generatedTasks.length,
+        totalRevenue: generatedTasks.reduce((sum, t) => sum + (t.revenuPotentiel || 0), 0)
+      });
+      logger.info(`✅ ${generatedTasks.length} tâches générées dans TickTick`);
       tracker.updateProgress(50);
 
       // 4. Bloquer créneaux dans Google Calendar
@@ -301,22 +306,48 @@ class SmartOrchestrator {
   // === GÉNÉRATION AUTOMATIQUE TÂCHES ===
 
   async generateAutomaticTasks(actions) {
+    const tracker = getActivityTracker();
     const generatedTasks = [];
 
     try {
-      for (const action of actions) {
-        // Vérifier si tâche similaire existe déjà
-        const existingTasks = await this.ticktick.getTasks();
+      // 📊 ÉTAPE 1: Récupération tâches existantes TickTick
+      tracker.addStep('ticktick_fetch_existing', '📥 Récupération tâches existantes TickTick');
+      logger.info('📥 Récupération des tâches existantes TickTick...');
+
+      const existingTasks = await this.ticktick.getTasks();
+
+      tracker.completeStep({
+        existingTasksCount: existingTasks.length,
+        actionsToProcess: actions.length
+      });
+      logger.info(`✅ ${existingTasks.length} tâches existantes récupérées dans TickTick`);
+
+      // 📊 ÉTAPE 2: Analyse et création tâches TickTick
+      let tasksCreated = 0;
+      let tasksSkipped = 0;
+
+      for (let i = 0; i < actions.length; i++) {
+        const action = actions[i];
+
+        // Sous-étape: Vérification existence
+        tracker.addStep('ticktick_check_duplicate', `🔍 Vérification doublon: "${action.titre.substring(0, 40)}..."`);
+
         const alreadyExists = existingTasks.some(task =>
           task.title.toLowerCase().includes(action.titre.toLowerCase().substring(0, 20))
         );
 
         if (alreadyExists) {
-          logger.debug(`Tâche similaire déjà existante: "${action.titre}"`);
+          logger.debug(`⏭️ Tâche similaire déjà existante: "${action.titre}"`);
+          tracker.completeStep({ skipped: true, reason: 'duplicate' });
+          tasksSkipped++;
           continue;
         }
 
-        // Créer la tâche dans TickTick
+        tracker.completeStep({ duplicate: false });
+
+        // Sous-étape: Création tâche TickTick
+        tracker.addStep('ticktick_create_task', `➕ Création tâche ${i + 1}/${actions.length}: "${action.titre.substring(0, 40)}..."`);
+
         const taskData = {
           title: action.titre,
           content: this.buildTaskContent(action),
@@ -326,6 +357,8 @@ class SmartOrchestrator {
           timeEstimate: action.duree
         };
 
+        logger.info(`➕ Création tâche TickTick: "${action.titre}" (priorité: ${action.priority}, durée: ${action.duree}min)`);
+
         const createdTask = await this.ticktick.createTask(taskData);
 
         generatedTasks.push({
@@ -334,13 +367,27 @@ class SmartOrchestrator {
           revenuPotentiel: action.revenuPotentiel
         });
 
-        logger.info(`✅ Tâche générée: "${action.titre}" (${action.duree}min, ${action.revenuPotentiel}€ potentiel)`);
+        tasksCreated++;
+
+        tracker.completeStep({
+          taskId: createdTask.id,
+          title: action.titre,
+          priority: action.priority,
+          duration: action.duree,
+          revenue: action.revenuPotentiel
+        });
+
+        logger.info(`✅ Tâche créée dans TickTick: "${action.titre}" (${action.duree}min, ${action.revenuPotentiel}€ potentiel)`);
       }
+
+      // Résumé final
+      logger.info(`📊 Génération tâches TickTick terminée: ${tasksCreated} créées, ${tasksSkipped} ignorées (doublons)`);
 
       return generatedTasks;
 
     } catch (error) {
-      logger.error('Erreur lors de la génération des tâches:', error.message);
+      logger.error('❌ Erreur lors de la génération des tâches TickTick:', error.message);
+      tracker.failStep(error);
       return generatedTasks;
     }
   }
