@@ -732,6 +732,25 @@ class OrchestratorApp {
         }
     }
 
+    async cleanCalendar() {
+        const confirmed = confirm('⚠️ ATTENTION: Supprimer TOUTES les tâches auto-générées du Calendar?\n\nCela supprimera tous les événements contenant:\n- "auto-generated"\n- "cap-numerique"\n- "TickTick:"\n- "Generated with Claude Code"\n\nCette action est IRRÉVERSIBLE.');
+
+        if (!confirmed) return;
+
+        this.showLoading();
+        try {
+            const result = await this.apiCall('/api/scheduler/clean-calendar', 'POST');
+
+            this.showAlert(`🧹 ${result.eventsDeleted} événements supprimés du Calendar`, 'success');
+
+            console.log('Calendar nettoyé:', result);
+        } catch (error) {
+            this.showAlert('Erreur lors du nettoyage Calendar', 'danger');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
     async generateReport() {
         this.showLoading();
         try {
@@ -1470,6 +1489,7 @@ window.stopScheduler = () => app.stopScheduler();
 window.runScheduler = () => app.runScheduler();
 window.analyzeAirtable = () => app.analyzeAirtable();
 window.continuousAdjust = () => app.continuousAdjust();
+window.cleanCalendar = () => app.cleanCalendar();
 window.generateReport = () => app.generateReport();
 window.refreshScheduler = () => app.refreshScheduler();
 window.showAuthModal = () => app.showAuthModal();

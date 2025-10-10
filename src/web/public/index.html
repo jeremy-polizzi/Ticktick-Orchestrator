@@ -604,8 +604,11 @@
                         <button class="btn btn-success me-2" onclick="analyzeAirtable()" title="Analyse CRM et création intelligente avec Next Best Time (Reclaim.ai)">
                             <i class="bi bi-lightbulb"></i> Analyse Airtable
                         </button>
-                        <button class="btn btn-info me-2" onclick="continuousAdjust()" title="Reschedule automatique des tâches (Motion style)">
+                        <button class="btn btn-info me-2" onclick="continuousAdjust()" title="Réorganise TickTick: max 3 tâches/jour + dates aux tâches sans date">
                             <i class="bi bi-arrow-repeat"></i> Ajustement Auto
+                        </button>
+                        <button class="btn btn-danger me-2" onclick="cleanCalendar()" title="Supprime TOUTES les tâches auto-générées du Calendar">
+                            <i class="bi bi-trash"></i> Nettoyer Calendar
                         </button>
                         <button class="btn btn-primary" onclick="refreshScheduler()">
                             <i class="bi bi-arrow-clockwise"></i> Actualiser
