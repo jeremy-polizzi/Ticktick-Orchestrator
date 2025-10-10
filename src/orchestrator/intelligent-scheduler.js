@@ -416,6 +416,14 @@ class IntelligentScheduler {
       const batchSize = 10; // Traiter par lots de 10
       const batchPauseMs = 15000; // Pause 15 secondes entre chaque lot
 
+      // Pause initiale pour laisser rate limit TickTick se reset
+      logger.info('⏸️ Pause initiale 10s (laisser rate limit TickTick se reset)');
+      tracker.updateActivityDetails({
+        status: 'paused',
+        pauseReason: 'Pause initiale 10s (laisser rate limit TickTick se reset)'
+      });
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
       for (let i = 0; i < tasksWithoutDate.length; i++) {
         const task = tasksWithoutDate[i];
 
