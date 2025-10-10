@@ -16,7 +16,7 @@ const config = {
     jwtSecret: process.env.JWT_SECRET || 'default-secret-change-in-production',
     adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
     rateLimitWindow: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000, // 15 min
-    rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100
+    rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 500 // Augmenté de 100 à 500 pour éviter rate limit avec polling
   },
 
   // TickTick API

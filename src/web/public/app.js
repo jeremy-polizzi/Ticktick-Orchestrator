@@ -487,13 +487,13 @@ class OrchestratorApp {
             clearInterval(this.activityPollingInterval);
         }
 
-        // Poll toutes les 2 secondes quand on est sur l'onglet scheduler
+        // Poll toutes les 10 secondes quand on est sur l'onglet scheduler (réduit de 2s pour éviter rate limit 429)
         this.activityPollingInterval = setInterval(async () => {
             const activeTab = document.querySelector('.tab-pane.active');
             if (activeTab && activeTab.id === 'scheduler') {
                 await this.loadCurrentActivity();
             }
-        }, 2000);
+        }, 10000); // 10 secondes
     }
 
     async loadCurrentActivity() {
