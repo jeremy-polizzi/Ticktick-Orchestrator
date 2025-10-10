@@ -397,8 +397,28 @@ class IntelligentScheduler {
 
       logger.info(`📊 Delta Sync: ${changedTasks.length} tâches analysées`);
 
-      // Step 2: Détection conflits
-      tracker.addStep('conflict_detection', '⚠️ Détection des conflits calendrier');
+      // Step 2: Tâches sans date - leur donner une date
+      tracker.addStep('assign_dates', '📅 Attribution dates aux tâches sans date');
+
+      const tasksWithoutDate = changedTasks.filter(t => !t.dueDate && !t.isCompleted && t.status !== 2);
+      let datesAssigned = 0;
+
+      for (const task of tasksWithoutDate) {
+        const priority = this.deducePriorityFromTask(task);
+        const bestDate = await this.findLeastLoadedDay(priority);
+
+        if (bestDate) {
+          await this.ticktick.updateTask(task.id, { dueDate: bestDate });
+          datesAssigned++;
+          logger.info(`📅 Date attribuée: "${task.title}" → ${bestDate}`);
+        }
+      }
+
+      tracker.completeStep({ tasksWithoutDate: tasksWithoutDate.length, datesAssigned });
+      tracker.updateProgress(40);
+
+      // Step 3: Détection jours surchargés dans TickTick
+      tracker.addStep('conflict_detection', '⚠️ Détection jours surchargés TickTick (>3 tâches)');
 
       let rescheduled = 0;
       let conflictsDetected = 0;
@@ -414,11 +434,11 @@ class IntelligentScheduler {
       tracker.completeStep({ conflictsDetected });
       tracker.updateProgress(60);
 
-      logger.info(`⚠️ ${conflictsDetected} conflits détectés sur ${changedTasks.length} tâches`);
+      logger.info(`⚠️ ${conflictsDetected} jours surchargés détectés dans TickTick`);
 
-      // Step 3: Replanification intelligente
+      // Step 4: Replanification intelligente (répartir les tâches)
       if (tasksToReschedule.length > 0) {
-        tracker.addStep('reschedule', `📅 Replanification de ${tasksToReschedule.length} tâches`);
+        tracker.addStep('reschedule', `📅 Répartition de ${tasksToReschedule.length} tâches vers jours peu chargés`);
 
         for (let i = 0; i < tasksToReschedule.length; i++) {
           const task = tasksToReschedule[i];
@@ -444,6 +464,7 @@ class IntelligentScheduler {
 
       tracker.endActivity('success', {
         tasksAnalyzed: changedTasks.length,
+        datesAssigned,
         conflictsDetected,
         tasksRescheduled: rescheduled
       });
@@ -451,6 +472,8 @@ class IntelligentScheduler {
       return {
         success: true,
         tasksAnalyzed: changedTasks.length,
+        tasksWithoutDate: tasksWithoutDate.length,
+        datesAssigned,
         conflictsDetected,
         tasksRescheduled: rescheduled,
         syncType: changedTasks.length === 162 ? 'baseline' : 'delta'
@@ -465,30 +488,89 @@ class IntelligentScheduler {
   }
 
   async needsReschedule(task) {
-    // Vérifier si la tâche a un conflit avec calendrier
+    // ❌ NE JAMAIS analyser Calendar - TickTick est la source de vérité
+    // Vérifier si le JOUR a trop de tâches dans TickTick
     if (!task.dueDate) return false;
 
-    const taskDate = new Date(task.dueDate);
-    const calendarId = config.calendars.jeremy;
-    const events = await this.googleCalendar.getEvents(calendarId, taskDate, taskDate);
+    const taskDate = task.dueDate.split('T')[0];
 
-    // Conflit détecté ?
-    return events.length > 5; // Jour surchargé
+    // Compter combien de tâches TickTick ce jour-là
+    const allTasks = await this.ticktick.getTasks();
+    const tasksThisDay = allTasks.filter(t => {
+      if (!t.dueDate || t.isCompleted || t.status === 2) return false;
+      const tDate = t.dueDate.split('T')[0];
+      return tDate === taskDate;
+    });
+
+    // Jour surchargé si >3 tâches TickTick ce jour
+    return tasksThisDay.length > 3;
   }
 
   async rescheduleTask(task) {
     const priority = this.deducePriorityFromTask(task);
-    const duration = task.timeEstimate || 60;
+    const oldDate = task.dueDate ? task.dueDate.split('T')[0] : 'sans date';
 
-    const bestSlot = await this.findNextBestTime(task, priority, duration);
+    // Trouver un jour peu chargé dans TickTick (≤3 tâches)
+    const bestDate = await this.findLeastLoadedDay(priority);
 
-    if (bestSlot) {
+    if (bestDate) {
       await this.ticktick.updateTask(task.id, {
-        dueDate: bestSlot.date
+        dueDate: bestDate
       });
 
-      logger.info(`🔄 Replanifié: "${task.title}" de ${task.dueDate} → ${bestSlot.date}`);
+      logger.info(`🔄 Replanifié: "${task.title}" de ${oldDate} → ${bestDate}`);
     }
+  }
+
+  async findLeastLoadedDay(priority) {
+    // Chercher sur 60 jours le jour le moins chargé
+    const allTasks = await this.ticktick.getTasks();
+    const today = new Date();
+
+    const loadByDay = {};
+
+    // Calculer charge par jour
+    for (let i = 0; i < 60; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      const dateStr = date.toISOString().split('T')[0];
+
+      const tasksThisDay = allTasks.filter(t => {
+        if (!t.dueDate || t.isCompleted || t.status === 2) return false;
+        const tDate = t.dueDate.split('T')[0];
+        return tDate === dateStr;
+      });
+
+      loadByDay[dateStr] = tasksThisDay.length;
+    }
+
+    // Trouver jours avec ≤2 tâches (pour ne pas dépasser 3 après ajout)
+    const availableDays = Object.entries(loadByDay)
+      .filter(([date, count]) => count <= 2)
+      .sort((a, b) => a[1] - b[1]); // Trier par charge croissante
+
+    if (availableDays.length > 0) {
+      // P1 CRITICAL: premier jour disponible
+      if (priority.value === 1) {
+        return availableDays[0][0];
+      }
+
+      // P2 HIGH: dans les 7 premiers jours
+      if (priority.value === 2) {
+        const firstWeek = availableDays.filter(([date]) => {
+          const d = new Date(date);
+          const diff = Math.floor((d - today) / (1000 * 60 * 60 * 24));
+          return diff <= 7;
+        });
+        return firstWeek.length > 0 ? firstWeek[0][0] : availableDays[0][0];
+      }
+
+      // P3/P4: répartir plus loin
+      const midIndex = Math.floor(availableDays.length / 2);
+      return availableDays[midIndex][0];
+    }
+
+    return null;
   }
 
   deducePriorityFromTask(task) {
