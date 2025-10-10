@@ -413,8 +413,12 @@ class IntelligentScheduler {
 
       let consecutiveErrors = 0;
       const maxConsecutiveErrors = 5; // Arrêter après 5 erreurs consécutives
+      const batchSize = 10; // Traiter par lots de 10
+      const batchPauseMs = 15000; // Pause 15 secondes entre chaque lot
 
-      for (const task of tasksWithoutDate) {
+      for (let i = 0; i < tasksWithoutDate.length; i++) {
+        const task = tasksWithoutDate[i];
+
         // Arrêter si trop d'erreurs consécutives (rate limit sévère)
         if (consecutiveErrors >= maxConsecutiveErrors) {
           logger.warn(`⚠️ Arrêt assignation après ${consecutiveErrors} erreurs consécutives (rate limit)`);
@@ -443,8 +447,14 @@ class IntelligentScheduler {
               logger.info(`📅 Date attribuée (${datesAssigned}/${tasksWithoutDate.length}): "${task.title.substring(0, 50)}..." → ${bestDate}`);
             }
 
-            // Délai 300ms entre chaque update pour éviter rate limiting TickTick
-            await new Promise(resolve => setTimeout(resolve, 300));
+            // Délai 500ms entre chaque update pour éviter rate limiting TickTick
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Pause longue tous les 10 updates (batch pause)
+            if (datesAssigned % batchSize === 0 && i < tasksWithoutDate.length - 1) {
+              logger.info(`⏸️ Pause ${batchPauseMs/1000}s après ${datesAssigned} tâches (évite rate limit)`);
+              await new Promise(resolve => setTimeout(resolve, batchPauseMs));
+            }
 
           } catch (error) {
             consecutiveErrors++;
