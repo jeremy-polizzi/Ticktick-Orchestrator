@@ -559,13 +559,13 @@ class IntelligentScheduler {
           const task = tasksToReschedule[i];
 
           const oldDate = task.dueDate;
-          await this.rescheduleTask(task);
+          await this.rescheduleTask(task, loadByDay);
           rescheduled++;
 
           logger.info(`🔄 [${i + 1}/${tasksToReschedule.length}] Replanifié: "${task.title}" de ${oldDate} → nouvelle date`);
 
-          // Délai 300ms entre chaque reschedule pour éviter rate limiting TickTick
-          await new Promise(resolve => setTimeout(resolve, 300));
+          // Délai 500ms entre chaque reschedule pour éviter rate limiting TickTick
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
 
         tracker.completeStep({ rescheduled });
@@ -619,17 +619,23 @@ class IntelligentScheduler {
     return taskCount > 3;
   }
 
-  async rescheduleTask(task) {
+  async rescheduleTask(task, loadByDay) {
     const priority = this.deducePriorityFromTask(task);
     const oldDate = task.dueDate ? task.dueDate.split('T')[0] : 'sans date';
 
     // Trouver un jour peu chargé dans TickTick (≤3 tâches)
-    const bestDate = await this.findLeastLoadedDay(priority);
+    const bestDate = this.selectLeastLoadedDay(priority, loadByDay);
 
     if (bestDate) {
       await this.ticktick.updateTask(task.id, {
         dueDate: bestDate
       });
+
+      // Mettre à jour loadByDay localement
+      if (oldDate && oldDate !== 'sans date') {
+        loadByDay[oldDate] = Math.max(0, (loadByDay[oldDate] || 0) - 1);
+      }
+      loadByDay[bestDate] = (loadByDay[bestDate] || 0) + 1;
 
       logger.info(`🔄 Replanifié: "${task.title}" de ${oldDate} → ${bestDate}`);
     }
