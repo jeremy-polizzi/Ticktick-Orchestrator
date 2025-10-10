@@ -303,6 +303,43 @@ class SmartOrchestrator {
     return actions;
   }
 
+  // === PLANIFICATION INTELLIGENTE DES DATES ===
+
+  calculateSmartDueDate(action, actionIndex, totalActions) {
+    const today = new Date();
+    let daysToAdd = 0;
+
+    // Répartir intelligemment selon priorité et type
+    if (action.priority === 'CRITICAL') {
+      // CRITICAL: demain ou après-demain (répartir pour éviter surcharge)
+      daysToAdd = 1 + (actionIndex % 2); // Alterne entre jour 1 et jour 2
+    } else if (action.priority === 'HIGH') {
+      // HIGH: cette semaine (jours 2-7)
+      daysToAdd = 2 + (actionIndex % 5);
+    } else {
+      // MEDIUM/LOW: semaine prochaine (jours 7-14)
+      daysToAdd = 7 + (actionIndex % 7);
+    }
+
+    // Ajuster selon le type d'action
+    if (action.when === 'morning') {
+      // Sessions d'appels le matin: lundi-vendredi uniquement
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() + daysToAdd);
+
+      // Éviter weekend pour appels
+      const dayOfWeek = targetDate.getDay();
+      if (dayOfWeek === 0) targetDate.setDate(targetDate.getDate() + 1); // Dimanche → Lundi
+      if (dayOfWeek === 6) targetDate.setDate(targetDate.getDate() + 2); // Samedi → Lundi
+
+      return targetDate.toISOString().split('T')[0];
+    }
+
+    const dueDate = new Date(today);
+    dueDate.setDate(today.getDate() + daysToAdd);
+    return dueDate.toISOString().split('T')[0];
+  }
+
   // === GÉNÉRATION AUTOMATIQUE TÂCHES ===
 
   async generateAutomaticTasks(actions) {
@@ -322,7 +359,7 @@ class SmartOrchestrator {
       });
       logger.info(`✅ ${existingTasks.length} tâches existantes récupérées dans TickTick`);
 
-      // 📊 ÉTAPE 2: Analyse et création tâches TickTick
+      // 📊 ÉTAPE 2: Analyse et création tâches TickTick avec dates intelligentes
       let tasksCreated = 0;
       let tasksSkipped = 0;
 
@@ -345,26 +382,30 @@ class SmartOrchestrator {
 
         tracker.completeStep({ duplicate: false });
 
-        // Sous-étape: Création tâche TickTick
+        // Sous-étape: Création tâche TickTick avec DATE INTELLIGENTE
         tracker.addStep('ticktick_create_task', `➕ Création tâche ${i + 1}/${actions.length}: "${action.titre.substring(0, 40)}..."`);
+
+        // PLANIFICATION INTELLIGENTE - répartir sur plusieurs jours selon priorité
+        const smartDueDate = this.calculateSmartDueDate(action, i, actions.length);
 
         const taskData = {
           title: action.titre,
           content: this.buildTaskContent(action),
           priority: action.priority === 'CRITICAL' ? 5 : action.priority === 'HIGH' ? 3 : 1,
           tags: ['#cap-numerique', '#auto-generated'],
-          dueDate: new Date().toISOString().split('T')[0], // Aujourd'hui
+          dueDate: smartDueDate, // DATE INTELLIGENTE (pas d'horaire!)
           timeEstimate: action.duree
         };
 
-        logger.info(`➕ Création tâche TickTick: "${action.titre}" (priorité: ${action.priority}, durée: ${action.duree}min)`);
+        logger.info(`➕ Création tâche TickTick: "${action.titre}" (priorité: ${action.priority}, date: ${smartDueDate})`);
 
         const createdTask = await this.ticktick.createTask(taskData);
 
         generatedTasks.push({
           action: action.type,
           task: createdTask,
-          revenuPotentiel: action.revenuPotentiel
+          revenuPotentiel: action.revenuPotentiel,
+          dueDate: smartDueDate
         });
 
         tasksCreated++;
@@ -373,15 +414,16 @@ class SmartOrchestrator {
           taskId: createdTask.id,
           title: action.titre,
           priority: action.priority,
+          dueDate: smartDueDate,
           duration: action.duree,
           revenue: action.revenuPotentiel
         });
 
-        logger.info(`✅ Tâche créée dans TickTick: "${action.titre}" (${action.duree}min, ${action.revenuPotentiel}€ potentiel)`);
+        logger.info(`✅ Tâche créée dans TickTick: "${action.titre}" pour le ${smartDueDate} (${action.duree}min, ${action.revenuPotentiel}€)`);
       }
 
       // Résumé final
-      logger.info(`📊 Génération tâches TickTick terminée: ${tasksCreated} créées, ${tasksSkipped} ignorées (doublons)`);
+      logger.info(`📊 Génération tâches TickTick terminée: ${tasksCreated} créées sur ${tasksCreated > 0 ? Math.ceil((actions.length - tasksSkipped) / 2) + 1 : 0} jours, ${tasksSkipped} ignorées (doublons)`);
 
       return generatedTasks;
 

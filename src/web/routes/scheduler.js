@@ -126,6 +126,36 @@ router.post('/run', async (req, res) => {
   }
 });
 
+// Lancer UNIQUEMENT l'analyse Airtable intelligente (création de tâches)
+router.post('/analyze-airtable', async (req, res) => {
+  try {
+    logger.info('🧠 Analyse Airtable intelligente déclenchée manuellement via API');
+
+    // Exécution asynchrone
+    scheduler.smartOrchestrator.performDailyAnalysis()
+      .then(report => {
+        logger.info(`✅ Analyse Airtable terminée: ${report.generatedTasks.length} tâches générées`);
+      })
+      .catch(error => {
+        logger.error('❌ Erreur lors de l\'analyse Airtable:', error.message);
+      });
+
+    res.json({
+      success: true,
+      message: 'Analyse Airtable démarrée - création de nouvelles tâches TickTick',
+      status: 'running',
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Erreur lors du lancement de l\'analyse Airtable:', error.message);
+    res.status(500).json({
+      error: 'Erreur lors du lancement de l\'analyse Airtable',
+      details: error.message
+    });
+  }
+});
+
 // Lancer une synchronisation manuelle
 router.post('/sync', async (req, res) => {
   try {

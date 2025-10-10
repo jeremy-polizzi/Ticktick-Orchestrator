@@ -686,6 +686,25 @@ class OrchestratorApp {
         }
     }
 
+    async analyzeAirtable() {
+        this.showLoading();
+        try {
+            await this.apiCall('/api/scheduler/analyze-airtable', 'POST');
+            this.showAlert('🧠 Analyse Airtable lancée - Création de nouvelles tâches TickTick basées sur votre CRM', 'success');
+            await this.loadScheduler();
+
+            // Rafraîchir après 5 secondes pour voir les nouvelles tâches dans l'activité
+            setTimeout(() => {
+                this.loadCurrentActivity();
+                this.loadSchedulerActivity();
+            }, 5000);
+        } catch (error) {
+            this.showAlert('Erreur lors de l\'analyse Airtable', 'danger');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
     async generateReport() {
         this.showLoading();
         try {
@@ -1422,6 +1441,7 @@ window.refreshCalendar = () => app.refreshCalendar();
 window.startScheduler = () => app.startScheduler();
 window.stopScheduler = () => app.stopScheduler();
 window.runScheduler = () => app.runScheduler();
+window.analyzeAirtable = () => app.analyzeAirtable();
 window.generateReport = () => app.generateReport();
 window.refreshScheduler = () => app.refreshScheduler();
 window.showAuthModal = () => app.showAuthModal();
