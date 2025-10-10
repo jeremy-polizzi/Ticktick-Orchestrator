@@ -103,7 +103,8 @@ class IntelligentScheduler {
     const endDate = new Date();
     endDate.setDate(now.getDate() + 14); // Chercher sur 14 jours
 
-    const events = await this.googleCalendar.getEvents(now, endDate);
+    const calendarId = config.calendars.jeremy;
+    const events = await this.googleCalendar.getEvents(calendarId, now, endDate);
 
     // Générer créneaux candidats
     const candidates = this.generateTimeSlotCandidates(task, priority, duration, events);
@@ -402,7 +403,8 @@ class IntelligentScheduler {
     if (!task.dueDate) return false;
 
     const taskDate = new Date(task.dueDate);
-    const events = await this.googleCalendar.getEvents(taskDate, taskDate);
+    const calendarId = config.calendars.jeremy;
+    const events = await this.googleCalendar.getEvents(calendarId, taskDate, taskDate);
 
     // Conflit détecté ?
     return events.length > 5; // Jour surchargé
