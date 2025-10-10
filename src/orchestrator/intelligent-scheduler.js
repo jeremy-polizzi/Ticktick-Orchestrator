@@ -411,7 +411,21 @@ class IntelligentScheduler {
       // Calculer charge par jour UNE SEULE FOIS (optimisation performance)
       const loadByDay = await this.calculateLoadByDay(allTasks);
 
+      let consecutiveErrors = 0;
+      const maxConsecutiveErrors = 5; // Arrêter après 5 erreurs consécutives
+
       for (const task of tasksWithoutDate) {
+        // Arrêter si trop d'erreurs consécutives (rate limit sévère)
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          logger.warn(`⚠️ Arrêt assignation après ${consecutiveErrors} erreurs consécutives (rate limit)`);
+          tracker.logError('rate_limit_stop', 'Trop d\'erreurs consécutives', {
+            consecutiveErrors,
+            datesAssigned,
+            remaining: tasksWithoutDate.length - datesAssigned
+          });
+          break;
+        }
+
         const priority = this.deducePriorityFromTask(task);
         const bestDate = this.selectLeastLoadedDay(priority, loadByDay);
 
@@ -420,6 +434,7 @@ class IntelligentScheduler {
           try {
             await this.ticktick.updateTask(task.id, { dueDate: bestDate });
             datesAssigned++;
+            consecutiveErrors = 0; // Reset compteur si succès
 
             // Incrémenter charge ce jour (pour prochain assignement)
             loadByDay[bestDate] = (loadByDay[bestDate] || 0) + 1;
@@ -432,16 +447,22 @@ class IntelligentScheduler {
             await new Promise(resolve => setTimeout(resolve, 300));
 
           } catch (error) {
-            logger.error(`Erreur attribution date tâche ${task.id}:`, error.message);
-            if (error.response) {
-              logger.error(`  → Status: ${error.response.status}, Data:`, JSON.stringify(error.response.data));
+            consecutiveErrors++;
+
+            // Logger seulement les 3 premières erreurs et ensuite tous les 10
+            if (consecutiveErrors <= 3 || consecutiveErrors % 10 === 0) {
+              logger.error(`Erreur attribution date tâche ${task.id}:`, error.message);
+              if (error.response) {
+                logger.error(`  → Status: ${error.response.status}, Data:`, JSON.stringify(error.response.data));
+              }
             }
 
             // Enregistrer l'erreur dans le tracker pour l'afficher sur le dashboard
             tracker.logError('assign_date', error, {
               taskId: task.id,
               taskTitle: task.title?.substring(0, 50),
-              bestDate
+              bestDate,
+              consecutiveErrors
             });
 
             // Continue avec les autres tâches au lieu de crasher
