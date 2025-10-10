@@ -405,8 +405,11 @@ class IntelligentScheduler {
 
       logger.info(`📅 ${tasksWithoutDate.length} tâches sans date trouvées`);
 
+      // Récupérer TOUTES les tâches pour calculer la charge correctement
+      const allTasks = await this.ticktick.getTasks();
+
       // Calculer charge par jour UNE SEULE FOIS (optimisation performance)
-      const loadByDay = await this.calculateLoadByDay(changedTasks);
+      const loadByDay = await this.calculateLoadByDay(allTasks);
 
       for (const task of tasksWithoutDate) {
         const priority = this.deducePriorityFromTask(task);
@@ -424,8 +427,15 @@ class IntelligentScheduler {
             if (datesAssigned <= 5 || datesAssigned % 10 === 0) {
               logger.info(`📅 Date attribuée (${datesAssigned}/${tasksWithoutDate.length}): "${task.title.substring(0, 50)}..." → ${bestDate}`);
             }
+
+            // Délai 100ms entre chaque update pour éviter rate limiting
+            await new Promise(resolve => setTimeout(resolve, 100));
+
           } catch (error) {
             logger.error(`Erreur attribution date tâche ${task.id}:`, error.message);
+            if (error.response) {
+              logger.error(`  → Status: ${error.response.status}, Data:`, JSON.stringify(error.response.data));
+            }
             // Continue avec les autres tâches au lieu de crasher
           }
         }
@@ -439,12 +449,16 @@ class IntelligentScheduler {
       // Step 3: Détection jours surchargés dans TickTick
       tracker.addStep('conflict_detection', '⚠️ Détection jours surchargés TickTick (>3 tâches)');
 
+      // Recalculer loadByDay après assignation des dates (utiliser allTasks mis à jour)
+      const updatedAllTasks = await this.ticktick.getTasks();
+      const updatedLoadByDay = await this.calculateLoadByDay(updatedAllTasks);
+
       let rescheduled = 0;
       let conflictsDetected = 0;
       const tasksToReschedule = [];
 
       for (const task of changedTasks) {
-        if (await this.needsReschedule(task)) {
+        if (this.needsReschedule(task, updatedLoadByDay)) {
           conflictsDetected++;
           tasksToReschedule.push(task);
         }
@@ -467,6 +481,9 @@ class IntelligentScheduler {
           rescheduled++;
 
           logger.info(`🔄 [${i + 1}/${tasksToReschedule.length}] Replanifié: "${task.title}" de ${oldDate} → nouvelle date`);
+
+          // Délai 100ms entre chaque reschedule pour éviter rate limiting
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
 
         tracker.completeStep({ rescheduled });
@@ -506,23 +523,18 @@ class IntelligentScheduler {
     }
   }
 
-  async needsReschedule(task) {
+  needsReschedule(task, loadByDay) {
     // ❌ NE JAMAIS analyser Calendar - TickTick est la source de vérité
     // Vérifier si le JOUR a trop de tâches dans TickTick
     if (!task.dueDate) return false;
 
     const taskDate = task.dueDate.split('T')[0];
 
-    // Compter combien de tâches TickTick ce jour-là
-    const allTasks = await this.ticktick.getTasks();
-    const tasksThisDay = allTasks.filter(t => {
-      if (!t.dueDate || t.isCompleted || t.status === 2) return false;
-      const tDate = t.dueDate.split('T')[0];
-      return tDate === taskDate;
-    });
+    // Utiliser loadByDay pré-calculé au lieu d'appeler getTasks()
+    const taskCount = loadByDay[taskDate] || 0;
 
     // Jour surchargé si >3 tâches TickTick ce jour
-    return tasksThisDay.length > 3;
+    return taskCount > 3;
   }
 
   async rescheduleTask(task) {
