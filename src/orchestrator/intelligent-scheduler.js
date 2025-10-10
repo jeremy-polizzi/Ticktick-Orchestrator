@@ -436,6 +436,14 @@ class IntelligentScheduler {
             if (error.response) {
               logger.error(`  → Status: ${error.response.status}, Data:`, JSON.stringify(error.response.data));
             }
+
+            // Enregistrer l'erreur dans le tracker pour l'afficher sur le dashboard
+            tracker.logError('assign_date', error, {
+              taskId: task.id,
+              taskTitle: task.title?.substring(0, 50),
+              bestDate
+            });
+
             // Continue avec les autres tâches au lieu de crasher
           }
         }

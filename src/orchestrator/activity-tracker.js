@@ -30,7 +30,8 @@ class ActivityTracker {
       startTimestamp: Date.now(),
       progress: 0,
       steps: [],
-      currentStep: null
+      currentStep: null,
+      errors: [] // Tableau des erreurs rencontrées
     };
 
     this.currentActivity = activity;
@@ -112,6 +113,35 @@ class ActivityTracker {
     }
 
     this.currentActivity.progress = Math.min(100, Math.max(0, progress));
+  }
+
+  /**
+   * Enregistre une erreur dans l'activité courante
+   * @param {string} context - Contexte de l'erreur (ex: "update_task", "get_calendar")
+   * @param {Error|string} error - Erreur ou message d'erreur
+   * @param {object} details - Détails supplémentaires (taskId, status code, etc.)
+   */
+  logError(context, error, details = {}) {
+    if (!this.currentActivity) {
+      return;
+    }
+
+    const errorEntry = {
+      timestamp: new Date().toISOString(),
+      context,
+      message: typeof error === 'string' ? error : error.message,
+      details
+    };
+
+    // Ajouter response data si disponible (erreurs HTTP)
+    if (error.response) {
+      errorEntry.httpStatus = error.response.status;
+      errorEntry.httpData = error.response.data;
+    }
+
+    this.currentActivity.errors.push(errorEntry);
+
+    logger.debug(`  ⚠️ Erreur enregistrée: ${context} - ${errorEntry.message}`);
   }
 
   /**

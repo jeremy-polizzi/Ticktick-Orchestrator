@@ -631,6 +631,28 @@ class OrchestratorApp {
                                         `).join('')}
                                     </div>
                                 ` : ''}
+                                ${activity.errors && activity.errors.length > 0 ? `
+                                    <div class="mt-2">
+                                        <div class="alert alert-warning py-2 mb-0">
+                                            <strong><i class="bi bi-exclamation-triangle"></i> ${activity.errors.length} erreur(s)</strong>
+                                            <div class="small mt-2" style="max-height: 200px; overflow-y: auto;">
+                                                ${activity.errors.map((err, idx) => `
+                                                    <div class="mb-2 ${idx > 0 ? 'border-top pt-2' : ''}">
+                                                        <strong>${err.context}</strong>: ${err.message}
+                                                        ${err.httpStatus ? `<span class="badge bg-danger ms-1">HTTP ${err.httpStatus}</span>` : ''}
+                                                        ${err.details && Object.keys(err.details).length > 0 ? `
+                                                            <div class="text-muted small mt-1">
+                                                                ${Object.entries(err.details).map(([k, v]) =>
+                                                                    `${k}: ${typeof v === 'object' ? JSON.stringify(v).substring(0, 50) : String(v).substring(0, 50)}`
+                                                                ).join(' • ')}
+                                                            </div>
+                                                        ` : ''}
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ` : ''}
                             </div>
                         </div>
                     </div>
