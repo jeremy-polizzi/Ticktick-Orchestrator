@@ -673,7 +673,36 @@ class OrchestratorApp {
                                 </div>
                                 ${activity.result && Object.keys(activity.result).length > 0 ? `
                                     <div class="mt-2">
-                                        ${Object.entries(activity.result).map(([key, value]) => `
+                                        ${activity.result.validated !== undefined ? `
+                                            <div class="alert ${activity.result.validated ? 'alert-success' : 'alert-danger'} py-2 mb-2">
+                                                <strong>${activity.result.validated ? '✅' : '❌'} Validation: ${activity.result.validated ? 'Chiffres RÉELS vérifiés' : 'ÉCART DÉTECTÉ'}</strong>
+                                                <div class="small mt-2">
+                                                    <strong>Annoncé:</strong>
+                                                    ${activity.result.initialWithoutDate || '?'} sans date au départ →
+                                                    ${activity.result.datesAssigned || 0} assignées →
+                                                    ${(activity.result.initialWithoutDate || 0) - (activity.result.datesAssigned || 0)} restantes attendues
+                                                </div>
+                                                <div class="small mt-1">
+                                                    <strong>Réalité TickTick:</strong>
+                                                    ${activity.result.realFinalWithoutDate !== undefined ? `
+                                                        <span class="badge ${activity.result.realFinalWithoutDate === 0 ? 'bg-success' : 'bg-warning'} ms-1">
+                                                            ${activity.result.realFinalWithoutDate} sans date
+                                                        </span>
+                                                    ` : ''}
+                                                    ${activity.result.realFinalWithDate !== undefined ? `
+                                                        <span class="badge bg-info ms-1">
+                                                            ${activity.result.realFinalWithDate} avec date
+                                                        </span>
+                                                    ` : ''}
+                                                    ${activity.result.realFinalOverloaded !== undefined ? `
+                                                        <span class="badge ${activity.result.realFinalOverloaded === 0 ? 'bg-success' : 'bg-warning'} ms-1">
+                                                            ${activity.result.realFinalOverloaded} jours surchargés
+                                                        </span>
+                                                    ` : ''}
+                                                </div>
+                                            </div>
+                                        ` : ''}
+                                        ${Object.entries(activity.result).filter(([key]) => !['validated', 'realFinalWithoutDate', 'realFinalWithDate', 'realFinalOverloaded', 'initialWithoutDate', 'datesAssigned'].includes(key)).map(([key, value]) => `
                                             <span class="badge bg-info me-1">
                                                 ${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}
                                             </span>

@@ -591,21 +591,90 @@ class IntelligentScheduler {
 
       logger.info(`✅ Ajustement continu: ${rescheduled} tâches replanifiées`);
 
+      // ===== ÉTAPE VALIDATION FINALE - VÉRIFICATION RÉALITÉ =====
+      tracker.addStep('validation', '🔍 Validation finale - Vérification réalité TickTick');
+
+      logger.info('🔍 Validation finale: recomptage réel dans TickTick...');
+
+      // Récupérer l'état RÉEL actuel de TickTick
+      const finalTasks = await this.ticktick.getTasks();
+      const finalActiveTasks = finalTasks.filter(t => !t.isCompleted && t.status !== 2);
+      const finalWithoutDate = finalActiveTasks.filter(t => !t.dueDate);
+      const finalWithDate = finalActiveTasks.filter(t => t.dueDate);
+
+      // Calculer charge finale par jour
+      const finalLoadByDay = {};
+      finalWithDate.forEach(t => {
+        const date = t.dueDate.split('T')[0];
+        finalLoadByDay[date] = (finalLoadByDay[date] || 0) + 1;
+      });
+
+      const finalOverloaded = Object.entries(finalLoadByDay).filter(([date, count]) => count > 3);
+
+      logger.info(`✅ État RÉEL final TickTick:`);
+      logger.info(`   - Total tâches actives: ${finalActiveTasks.length}`);
+      logger.info(`   - Tâches SANS date: ${finalWithoutDate.length}`);
+      logger.info(`   - Tâches AVEC date: ${finalWithDate.length}`);
+      logger.info(`   - Jours surchargés (>3): ${finalOverloaded.length}`);
+
+      // Détecter écarts entre annoncé et réel
+      const expectedWithoutDate = tasksWithoutDate.length - datesAssigned;
+      const discrepancy = finalWithoutDate.length - expectedWithoutDate;
+
+      if (Math.abs(discrepancy) > 0) {
+        logger.warn(`⚠️ ÉCART DÉTECTÉ:`);
+        logger.warn(`   Attendu: ${expectedWithoutDate} tâches sans date`);
+        logger.warn(`   Réel: ${finalWithoutDate.length} tâches sans date`);
+        logger.warn(`   Différence: ${discrepancy}`);
+
+        tracker.logError('validation_discrepancy', 'Écart entre stats annoncées et réalité', {
+          announced: {
+            initialWithoutDate: tasksWithoutDate.length,
+            datesAssigned,
+            expectedRemaining: expectedWithoutDate
+          },
+          reality: {
+            actualRemaining: finalWithoutDate.length,
+            actualWithDate: finalWithDate.length
+          },
+          discrepancy
+        });
+      } else {
+        logger.info(`✅ Validation réussie: chiffres annoncés = réalité`);
+      }
+
+      tracker.completeStep({
+        finalWithoutDate: finalWithoutDate.length,
+        finalWithDate: finalWithDate.length,
+        finalOverloaded: finalOverloaded.length,
+        validated: Math.abs(discrepancy) === 0
+      });
+
       tracker.endActivity('success', {
-        tasksAnalyzed: changedTasks.length,
+        tasksAnalyzed: allTasks.length,
+        initialWithoutDate: tasksWithoutDate.length,
         datesAssigned,
         conflictsDetected,
-        tasksRescheduled: rescheduled
+        tasksRescheduled: rescheduled,
+        // ÉTAT RÉEL FINAL
+        realFinalWithoutDate: finalWithoutDate.length,
+        realFinalWithDate: finalWithDate.length,
+        realFinalOverloaded: finalOverloaded.length,
+        validated: Math.abs(discrepancy) === 0
       });
 
       return {
         success: true,
-        tasksAnalyzed: changedTasks.length,
-        tasksWithoutDate: tasksWithoutDate.length,
+        tasksAnalyzed: allTasks.length,
+        initialWithoutDate: tasksWithoutDate.length,
         datesAssigned,
         conflictsDetected,
         tasksRescheduled: rescheduled,
-        syncType: changedTasks.length === 162 ? 'baseline' : 'delta'
+        // ÉTAT RÉEL FINAL
+        realFinalWithoutDate: finalWithoutDate.length,
+        realFinalWithDate: finalWithDate.length,
+        realFinalOverloaded: finalOverloaded.length,
+        validated: Math.abs(discrepancy) === 0
       };
 
     } catch (error) {
