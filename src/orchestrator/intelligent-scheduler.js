@@ -457,26 +457,48 @@ class IntelligentScheduler {
 
           // Mise à jour avec retry si erreur
           try {
-            await this.ticktick.updateTask(task.id, { dueDate: bestDate });
+            // Log données envoyées pour debug
+            logger.debug(`Envoi update: taskId=${task.id}, dueDate=${bestDate}, titre="${task.title.substring(0, 40)}"`);
+
+            // Envoyer update
+            const updateResult = await this.ticktick.updateTask(task.id, { dueDate: bestDate });
+            logger.debug(`Update réponse: ${JSON.stringify(updateResult).substring(0, 200)}`);
+
+            // VÉRIFICATION IMMÉDIATE: la tâche a-t-elle VRAIMENT été modifiée?
+            await new Promise(resolve => setTimeout(resolve, 300)); // Pause 300ms pour persistence TickTick
+
+            const verifiedTask = await this.ticktick.getTask(task.id);
+            const actuallyUpdated = verifiedTask && verifiedTask.dueDate && verifiedTask.dueDate.includes(bestDate);
+
+            logger.debug(`Vérification: dueDate réelle="${verifiedTask?.dueDate}", attendu="${bestDate}", match=${actuallyUpdated}`);
+
+            if (!actuallyUpdated) {
+              // L'API a dit OK mais la tâche n'a PAS changé dans TickTick!
+              const errorMsg = `Update ignoré par TickTick - Envoyé: ${bestDate}, Réel: ${verifiedTask?.dueDate || 'null'}`;
+              logger.error(errorMsg);
+              throw new Error(errorMsg);
+            }
+
+            // Succès RÉEL vérifié
             datesAssigned++;
-            consecutiveErrors = 0; // Reset compteur si succès
+            consecutiveErrors = 0;
 
             // Incrémenter charge ce jour (pour prochain assignement)
             loadByDay[bestDate] = (loadByDay[bestDate] || 0) + 1;
 
-            // Mettre à jour dashboard avec succès
+            // Mettre à jour dashboard avec succès VÉRIFIÉ
             tracker.updateActivityDetails({
               currentTaskIndex: i + 1,
               totalTasks: tasksWithoutDate.length,
               currentTask: task.title,
               targetDate: bestDate,
-              status: 'success',
+              status: 'success_verified',
               successCount: datesAssigned,
               errorCount: consecutiveErrors
             });
 
             if (datesAssigned <= 5 || datesAssigned % 10 === 0) {
-              logger.info(`📅 Date attribuée (${datesAssigned}/${tasksWithoutDate.length}): "${task.title.substring(0, 50)}..." → ${bestDate}`);
+              logger.info(`✅ Date VÉRIFIÉE (${datesAssigned}/${tasksWithoutDate.length}): "${task.title.substring(0, 50)}..." → ${bestDate}`);
             }
 
             // Délai 500ms entre chaque update pour éviter rate limiting TickTick
