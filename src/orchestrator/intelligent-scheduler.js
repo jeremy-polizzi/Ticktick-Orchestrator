@@ -400,13 +400,15 @@ class IntelligentScheduler {
       // Step 2: Tâches sans date - leur donner une date
       tracker.addStep('assign_dates', '📅 Attribution dates aux tâches sans date');
 
-      const tasksWithoutDate = changedTasks.filter(t => !t.dueDate && !t.isCompleted && t.status !== 2);
+      // Récupérer TOUTES les tâches pour calculer la charge correctement
+      const allTasks = await this.ticktick.getTasks();
+
+      // IMPORTANT: Filtrer sur allTasks, pas changedTasks!
+      // On veut TOUTES les tâches sans date, pas juste celles modifiées récemment
+      const tasksWithoutDate = allTasks.filter(t => !t.dueDate && !t.isCompleted && t.status !== 2);
       let datesAssigned = 0;
 
       logger.info(`📅 ${tasksWithoutDate.length} tâches sans date trouvées`);
-
-      // Récupérer TOUTES les tâches pour calculer la charge correctement
-      const allTasks = await this.ticktick.getTasks();
 
       // Calculer charge par jour UNE SEULE FOIS (optimisation performance)
       const loadByDay = await this.calculateLoadByDay(allTasks);
@@ -547,7 +549,8 @@ class IntelligentScheduler {
       let conflictsDetected = 0;
       const tasksToReschedule = [];
 
-      for (const task of changedTasks) {
+      // Vérifier TOUTES les tâches pour les conflits, pas juste les modifiées
+      for (const task of allTasks) {
         if (this.needsReschedule(task, loadByDay)) {
           conflictsDetected++;
           tasksToReschedule.push(task);
