@@ -434,6 +434,17 @@ class IntelligentScheduler {
         const bestDate = this.selectLeastLoadedDay(priority, loadByDay);
 
         if (bestDate) {
+          // Afficher tâche en cours sur dashboard
+          tracker.updateActivityDetails({
+            currentTaskIndex: i + 1,
+            totalTasks: tasksWithoutDate.length,
+            currentTask: task.title,
+            targetDate: bestDate,
+            status: 'processing',
+            successCount: datesAssigned,
+            errorCount: consecutiveErrors
+          });
+
           // Mise à jour avec retry si erreur
           try {
             await this.ticktick.updateTask(task.id, { dueDate: bestDate });
@@ -442,6 +453,17 @@ class IntelligentScheduler {
 
             // Incrémenter charge ce jour (pour prochain assignement)
             loadByDay[bestDate] = (loadByDay[bestDate] || 0) + 1;
+
+            // Mettre à jour dashboard avec succès
+            tracker.updateActivityDetails({
+              currentTaskIndex: i + 1,
+              totalTasks: tasksWithoutDate.length,
+              currentTask: task.title,
+              targetDate: bestDate,
+              status: 'success',
+              successCount: datesAssigned,
+              errorCount: consecutiveErrors
+            });
 
             if (datesAssigned <= 5 || datesAssigned % 10 === 0) {
               logger.info(`📅 Date attribuée (${datesAssigned}/${tasksWithoutDate.length}): "${task.title.substring(0, 50)}..." → ${bestDate}`);
@@ -453,11 +475,32 @@ class IntelligentScheduler {
             // Pause longue tous les 10 updates (batch pause)
             if (datesAssigned % batchSize === 0 && i < tasksWithoutDate.length - 1) {
               logger.info(`⏸️ Pause ${batchPauseMs/1000}s après ${datesAssigned} tâches (évite rate limit)`);
+
+              // Afficher pause sur dashboard
+              tracker.updateActivityDetails({
+                status: 'paused',
+                pauseReason: `Pause ${batchPauseMs/1000}s après ${datesAssigned} tâches (évite rate limit)`,
+                successCount: datesAssigned,
+                errorCount: consecutiveErrors
+              });
+
               await new Promise(resolve => setTimeout(resolve, batchPauseMs));
             }
 
           } catch (error) {
             consecutiveErrors++;
+
+            // Mettre à jour dashboard avec erreur
+            tracker.updateActivityDetails({
+              currentTaskIndex: i + 1,
+              totalTasks: tasksWithoutDate.length,
+              currentTask: task.title,
+              targetDate: bestDate,
+              status: 'error',
+              lastError: error.message,
+              successCount: datesAssigned,
+              errorCount: consecutiveErrors
+            });
 
             // Logger seulement les 3 premières erreurs et ensuite tous les 10
             if (consecutiveErrors <= 3 || consecutiveErrors % 10 === 0) {

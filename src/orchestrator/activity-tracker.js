@@ -116,6 +116,23 @@ class ActivityTracker {
   }
 
   /**
+   * Met à jour les détails en temps réel de l'activité courante
+   * @param {object} details - Détails à afficher (currentTask, action, status, etc.)
+   */
+  updateActivityDetails(details = {}) {
+    if (!this.currentActivity) {
+      return;
+    }
+
+    // Ajouter/mettre à jour les détails temps réel
+    this.currentActivity.liveDetails = {
+      ...this.currentActivity.liveDetails,
+      ...details,
+      lastUpdate: new Date().toISOString()
+    };
+  }
+
+  /**
    * Enregistre une erreur dans l'activité courante
    * @param {string} context - Contexte de l'erreur (ex: "update_task", "get_calendar")
    * @param {Error|string} error - Erreur ou message d'erreur

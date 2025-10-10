@@ -539,7 +539,56 @@ class OrchestratorApp {
                         </div>
                     </div>
 
-                    ${act.currentStep ? `
+                    ${act.liveDetails ? `
+                        <div class="border-top pt-3">
+                            <div class="small mb-2"><strong>Détails en temps réel:</strong></div>
+
+                            ${act.liveDetails.currentTask ? `
+                                <div class="mb-3">
+                                    <div class="d-flex align-items-center mb-2">
+                                        ${act.liveDetails.status === 'processing' ? '<div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>' :
+                                          act.liveDetails.status === 'success' ? '<i class="bi bi-check-circle text-success me-2"></i>' :
+                                          act.liveDetails.status === 'error' ? '<i class="bi bi-x-circle text-danger me-2"></i>' :
+                                          act.liveDetails.status === 'paused' ? '<i class="bi bi-pause-circle text-warning me-2"></i>' : ''}
+                                        <span class="fw-bold">
+                                            ${act.liveDetails.currentTaskIndex || '?'}/${act.liveDetails.totalTasks || '?'}
+                                        </span>
+                                    </div>
+                                    <div class="small text-truncate" style="max-width: 100%;" title="${act.liveDetails.currentTask}">
+                                        📋 ${act.liveDetails.currentTask}
+                                    </div>
+                                    ${act.liveDetails.targetDate ? `
+                                        <div class="small text-muted mt-1">
+                                            📅 Date cible: ${act.liveDetails.targetDate}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            ` : ''}
+
+                            ${act.liveDetails.pauseReason ? `
+                                <div class="alert alert-warning py-2 mb-2">
+                                    <i class="bi bi-pause-circle"></i> ${act.liveDetails.pauseReason}
+                                </div>
+                            ` : ''}
+
+                            ${act.liveDetails.lastError ? `
+                                <div class="alert alert-danger py-2 mb-2 small">
+                                    ❌ ${act.liveDetails.lastError}
+                                </div>
+                            ` : ''}
+
+                            <div class="d-flex gap-3 small">
+                                <span class="text-success">
+                                    <i class="bi bi-check-circle-fill"></i> ${act.liveDetails.successCount || 0} réussies
+                                </span>
+                                ${act.liveDetails.errorCount > 0 ? `
+                                    <span class="text-danger">
+                                        <i class="bi bi-x-circle-fill"></i> ${act.liveDetails.errorCount} erreurs
+                                    </span>
+                                ` : ''}
+                            </div>
+                        </div>
+                    ` : act.currentStep ? `
                         <div class="border-top pt-3">
                             <div class="small mb-2"><strong>Étape actuelle:</strong></div>
                             <div class="d-flex align-items-center">
