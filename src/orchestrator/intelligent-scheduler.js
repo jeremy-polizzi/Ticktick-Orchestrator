@@ -378,24 +378,90 @@ class IntelligentScheduler {
   // === AJUSTEMENT CONTINU ===
 
   async performContinuousAdjustment() {
-    logger.info('🔄 Ajustement continu - reschedule automatique');
+    const { getInstance: getActivityTracker } = require('./activity-tracker');
+    const tracker = getActivityTracker();
 
-    // Récupérer tâches modifiées (delta sync)
-    const changedTasks = await this.getChangedTasks();
+    try {
+      tracker.startActivity('continuous_adjustment', '🔄 Ajustement Continu - Reschedule Automatique');
 
-    // Vérifier conflits
-    let rescheduled = 0;
-    for (const task of changedTasks) {
-      if (await this.needsReschedule(task)) {
-        await this.rescheduleTask(task);
-        rescheduled++;
+      // Step 1: Delta Sync - récupérer tâches modifiées
+      tracker.addStep('delta_sync', '🔍 Delta Sync - Analyse tâches modifiées');
+      logger.info('🔄 Ajustement continu - reschedule automatique');
+
+      const changedTasks = await this.getChangedTasks();
+      tracker.completeStep({
+        totalTasks: changedTasks.length,
+        sync: changedTasks.length === 162 ? 'baseline' : 'delta'
+      });
+      tracker.updateProgress(30);
+
+      logger.info(`📊 Delta Sync: ${changedTasks.length} tâches analysées`);
+
+      // Step 2: Détection conflits
+      tracker.addStep('conflict_detection', '⚠️ Détection des conflits calendrier');
+
+      let rescheduled = 0;
+      let conflictsDetected = 0;
+      const tasksToReschedule = [];
+
+      for (const task of changedTasks) {
+        if (await this.needsReschedule(task)) {
+          conflictsDetected++;
+          tasksToReschedule.push(task);
+        }
       }
+
+      tracker.completeStep({ conflictsDetected });
+      tracker.updateProgress(60);
+
+      logger.info(`⚠️ ${conflictsDetected} conflits détectés sur ${changedTasks.length} tâches`);
+
+      // Step 3: Replanification intelligente
+      if (tasksToReschedule.length > 0) {
+        tracker.addStep('reschedule', `📅 Replanification de ${tasksToReschedule.length} tâches`);
+
+        for (let i = 0; i < tasksToReschedule.length; i++) {
+          const task = tasksToReschedule[i];
+
+          const oldDate = task.dueDate;
+          await this.rescheduleTask(task);
+          rescheduled++;
+
+          logger.info(`🔄 [${i + 1}/${tasksToReschedule.length}] Replanifié: "${task.title}" de ${oldDate} → nouvelle date`);
+        }
+
+        tracker.completeStep({ rescheduled });
+        tracker.updateProgress(100);
+      } else {
+        tracker.addStep('no_conflicts', '✅ Aucun conflit détecté - Pas de replanification nécessaire');
+        tracker.completeStep({ message: 'Tous les créneaux sont optimaux' });
+        tracker.updateProgress(100);
+      }
+
+      this.lastSync.timestamp = Date.now();
+
+      logger.info(`✅ Ajustement continu: ${rescheduled} tâches replanifiées`);
+
+      tracker.endActivity('success', {
+        tasksAnalyzed: changedTasks.length,
+        conflictsDetected,
+        tasksRescheduled: rescheduled
+      });
+
+      return {
+        success: true,
+        tasksAnalyzed: changedTasks.length,
+        conflictsDetected,
+        tasksRescheduled: rescheduled,
+        syncType: changedTasks.length === 162 ? 'baseline' : 'delta'
+      };
+
+    } catch (error) {
+      logger.error('❌ Erreur ajustement continu:', error.message);
+      tracker.failStep(error);
+      tracker.endActivity('failed', { error: error.message });
+      throw error;
     }
-
-    logger.info(`✅ Ajustement continu: ${rescheduled} tâches replanifiées`);
-
-    this.lastSync.timestamp = Date.now();
-    return rescheduled;
   }
 
   async needsReschedule(task) {

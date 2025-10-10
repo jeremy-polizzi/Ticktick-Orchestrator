@@ -708,12 +708,22 @@ class OrchestratorApp {
         this.showLoading();
         try {
             await this.apiCall('/api/scheduler/continuous-adjust', 'POST');
-            this.showAlert('🔄 Ajustement continu lancé - Reschedule automatique (Motion)', 'success');
-            await this.loadScheduler();
+            this.showAlert('🔄 Ajustement continu lancé - Visible en temps réel ci-dessous', 'success');
 
-            setTimeout(() => {
+            // Charger immédiatement l'activité
+            this.loadCurrentActivity();
+            this.loadSchedulerActivity();
+
+            // Continuer à rafraîchir toutes les 3 secondes pendant 30 secondes
+            let refreshCount = 0;
+            const refreshInterval = setInterval(() => {
                 this.loadCurrentActivity();
                 this.loadSchedulerActivity();
+                refreshCount++;
+
+                if (refreshCount >= 10) { // 30 secondes (10 * 3s)
+                    clearInterval(refreshInterval);
+                }
             }, 3000);
         } catch (error) {
             this.showAlert('Erreur lors de l\'ajustement continu', 'danger');

@@ -168,18 +168,20 @@ router.post('/continuous-adjust', async (req, res) => {
     const IntelligentScheduler = require('../../orchestrator/intelligent-scheduler');
     const intelligentScheduler = new IntelligentScheduler();
 
+    // Exécuter de manière asynchrone avec tracking visible
     intelligentScheduler.initialize()
       .then(() => intelligentScheduler.performContinuousAdjustment())
-      .then(rescheduled => {
-        logger.info(`✅ Ajustement continu terminé: ${rescheduled} tâches replanifiées`);
+      .then(result => {
+        logger.info(`✅ Ajustement continu terminé: ${result.tasksRescheduled} tâches replanifiées (${result.conflictsDetected} conflits détectés sur ${result.tasksAnalyzed} tâches)`);
       })
       .catch(error => {
         logger.error('❌ Erreur ajustement continu:', error.message);
       });
 
+    // Réponse immédiate avec indication que l'activité est trackée
     res.json({
       success: true,
-      message: '🔄 Ajustement continu démarré - reschedule automatique activé',
+      message: '🔄 Ajustement continu lancé - Visible dans "Activité en Temps Réel"',
       status: 'running',
       timestamp: new Date().toISOString()
     });
