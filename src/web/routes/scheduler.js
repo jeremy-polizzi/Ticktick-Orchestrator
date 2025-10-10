@@ -126,31 +126,68 @@ router.post('/run', async (req, res) => {
   }
 });
 
-// Lancer UNIQUEMENT l'analyse Airtable intelligente (création de tâches)
+// Lancer UNIQUEMENT l'analyse Airtable intelligente avec NOUVEAU système intelligent
 router.post('/analyze-airtable', async (req, res) => {
   try {
-    logger.info('🧠 Analyse Airtable intelligente déclenchée manuellement via API');
+    logger.info('🧠 Analyse Airtable INTELLIGENTE (Reclaim.ai style) déclenchée via API');
+
+    const IntelligentScheduler = require('../../orchestrator/intelligent-scheduler');
+    const intelligentScheduler = new IntelligentScheduler();
 
     // Exécution asynchrone
-    scheduler.smartOrchestrator.performDailyAnalysis()
+    intelligentScheduler.initialize()
+      .then(() => intelligentScheduler.analyzeAndScheduleFromCRM())
       .then(report => {
-        logger.info(`✅ Analyse Airtable terminée: ${report.generatedTasks.length} tâches générées`);
+        logger.info(`✅ Planification intelligente terminée: ${report.tasksCreated} tâches créées avec Next Best Time`);
       })
       .catch(error => {
-        logger.error('❌ Erreur lors de l\'analyse Airtable:', error.message);
+        logger.error('❌ Erreur planification intelligente:', error.message);
       });
 
     res.json({
       success: true,
-      message: 'Analyse Airtable démarrée - création de nouvelles tâches TickTick',
+      message: '🧠 Planification intelligente démarrée (système Reclaim.ai) - Next Best Time activé',
       status: 'running',
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    logger.error('Erreur lors du lancement de l\'analyse Airtable:', error.message);
+    logger.error('Erreur lancement planification intelligente:', error.message);
     res.status(500).json({
-      error: 'Erreur lors du lancement de l\'analyse Airtable',
+      error: 'Erreur lors de la planification intelligente',
+      details: error.message
+    });
+  }
+});
+
+// Ajustement continu intelligent (reschedule automatique)
+router.post('/continuous-adjust', async (req, res) => {
+  try {
+    logger.info('🔄 Ajustement continu déclenché via API');
+
+    const IntelligentScheduler = require('../../orchestrator/intelligent-scheduler');
+    const intelligentScheduler = new IntelligentScheduler();
+
+    intelligentScheduler.initialize()
+      .then(() => intelligentScheduler.performContinuousAdjustment())
+      .then(rescheduled => {
+        logger.info(`✅ Ajustement continu terminé: ${rescheduled} tâches replanifiées`);
+      })
+      .catch(error => {
+        logger.error('❌ Erreur ajustement continu:', error.message);
+      });
+
+    res.json({
+      success: true,
+      message: '🔄 Ajustement continu démarré - reschedule automatique activé',
+      status: 'running',
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Erreur lancement ajustement continu:', error.message);
+    res.status(500).json({
+      error: 'Erreur lors de l\'ajustement continu',
       details: error.message
     });
   }

@@ -690,16 +690,33 @@ class OrchestratorApp {
         this.showLoading();
         try {
             await this.apiCall('/api/scheduler/analyze-airtable', 'POST');
-            this.showAlert('🧠 Analyse Airtable lancée - Création de nouvelles tâches TickTick basées sur votre CRM', 'success');
+            this.showAlert('🧠 Planification intelligente lancée (Reclaim.ai) - Next Best Time activé', 'success');
             await this.loadScheduler();
 
-            // Rafraîchir après 5 secondes pour voir les nouvelles tâches dans l'activité
             setTimeout(() => {
                 this.loadCurrentActivity();
                 this.loadSchedulerActivity();
             }, 5000);
         } catch (error) {
-            this.showAlert('Erreur lors de l\'analyse Airtable', 'danger');
+            this.showAlert('Erreur lors de la planification intelligente', 'danger');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async continuousAdjust() {
+        this.showLoading();
+        try {
+            await this.apiCall('/api/scheduler/continuous-adjust', 'POST');
+            this.showAlert('🔄 Ajustement continu lancé - Reschedule automatique (Motion)', 'success');
+            await this.loadScheduler();
+
+            setTimeout(() => {
+                this.loadCurrentActivity();
+                this.loadSchedulerActivity();
+            }, 3000);
+        } catch (error) {
+            this.showAlert('Erreur lors de l\'ajustement continu', 'danger');
         } finally {
             this.hideLoading();
         }
@@ -1442,6 +1459,7 @@ window.startScheduler = () => app.startScheduler();
 window.stopScheduler = () => app.stopScheduler();
 window.runScheduler = () => app.runScheduler();
 window.analyzeAirtable = () => app.analyzeAirtable();
+window.continuousAdjust = () => app.continuousAdjust();
 window.generateReport = () => app.generateReport();
 window.refreshScheduler = () => app.refreshScheduler();
 window.showAuthModal = () => app.showAuthModal();
