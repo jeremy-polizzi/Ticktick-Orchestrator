@@ -355,11 +355,14 @@ class IntelligentScheduler {
       }
 
       // Créer tâche TickTick avec date optimale
+      // Convertir format date: "2025-10-15" → "2025-10-15T12:00:00+0000"
+      const dueDateISO = `${bestSlot.date}T12:00:00+0000`;
+
       const task = await this.ticktick.createTask({
         title: action.titre,
         content: action.description,
         priority: action.priority.ticktickPriority,
-        dueDate: bestSlot.date,
+        dueDate: dueDateISO,
         tags: ['cap-numerique', 'auto-scheduled']
       });
 
@@ -457,9 +460,11 @@ class IntelligentScheduler {
 
           // Mise à jour avec retry si erreur
           try {
-            // Envoyer update (SANS vérification immédiate - cause rate limit)
-            // La validation finale à la fin comparera annoncé vs réalité TickTick
-            await this.ticktick.updateTask(task.id, { dueDate: bestDate });
+            // Convertir format date: "2025-10-15" → "2025-10-15T12:00:00+0000"
+            // TickTick API exige format ISO 8601 avec heure et timezone
+            const dueDateISO = `${bestDate}T12:00:00+0000`;
+
+            await this.ticktick.updateTask(task.id, { dueDate: dueDateISO });
 
             // Succès (si pas d'erreur thrown)
             datesAssigned++;
@@ -711,8 +716,11 @@ class IntelligentScheduler {
     const bestDate = this.selectLeastLoadedDay(priority, loadByDay);
 
     if (bestDate) {
+      // Convertir format date: "2025-10-15" → "2025-10-15T12:00:00+0000"
+      const dueDateISO = `${bestDate}T12:00:00+0000`;
+
       await this.ticktick.updateTask(task.id, {
-        dueDate: bestDate
+        dueDate: dueDateISO
       });
 
       // Mettre à jour loadByDay localement
