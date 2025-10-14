@@ -384,7 +384,8 @@ class TickTickAPI {
 
   async updateTask(taskId, taskData, skipCacheClear = false) {
     try {
-      const response = await this.client.post(`/open/v1/task/${taskId}`, taskData);
+      // Endpoint correct: /task/${taskId} (pas /open/v1/task/)
+      const response = await this.client.post(`/task/${taskId}`, taskData);
 
       logger.info(`Tâche mise à jour: ${taskId}`);
 
