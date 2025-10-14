@@ -46,6 +46,25 @@ class TaskManager {
         this.trackManualModification(taskId);
       }
 
+      // TickTick nécessite id, projectId, title obligatoires
+      // Récupérer la tâche pour avoir ces champs si pas fournis
+      if (!updateData.id || !updateData.projectId || !updateData.title) {
+        const allTasks = await this.ticktick.getTasks();
+        const existingTask = allTasks.find(t => t.id === taskId);
+
+        if (!existingTask) {
+          throw new Error(`Task ${taskId} not found`);
+        }
+
+        // Fusionner avec les champs obligatoires
+        updateData = {
+          id: existingTask.id,
+          projectId: existingTask.projectId,
+          title: existingTask.title,
+          ...updateData
+        };
+      }
+
       const updatedTask = await this.ticktick.updateTask(taskId, updateData);
 
       logger.logTaskAction('update', { id: taskId, ...updateData }, 'success');

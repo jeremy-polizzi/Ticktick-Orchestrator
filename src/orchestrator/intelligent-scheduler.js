@@ -464,7 +464,13 @@ class IntelligentScheduler {
             // TickTick API exige format ISO 8601 avec heure et timezone
             const dueDateISO = `${bestDate}T12:00:00+0000`;
 
-            await this.ticktick.updateTask(task.id, { dueDate: dueDateISO });
+            // TickTick nécessite id, projectId, title en plus de dueDate
+            await this.ticktick.updateTask(task.id, {
+              id: task.id,
+              projectId: task.projectId,
+              title: task.title,
+              dueDate: dueDateISO
+            });
 
             // Succès (si pas d'erreur thrown)
             datesAssigned++;
@@ -719,7 +725,11 @@ class IntelligentScheduler {
       // Convertir format date: "2025-10-15" → "2025-10-15T12:00:00+0000"
       const dueDateISO = `${bestDate}T12:00:00+0000`;
 
+      // TickTick nécessite id, projectId, title en plus de dueDate
       await this.ticktick.updateTask(task.id, {
+        id: task.id,
+        projectId: task.projectId,
+        title: task.title,
         dueDate: dueDateISO
       });
 

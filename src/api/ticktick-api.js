@@ -384,8 +384,8 @@ class TickTickAPI {
 
   async updateTask(taskId, taskData, skipCacheClear = false) {
     try {
-      // Endpoint correct: /task/${taskId} (pas /open/v1/task/)
-      const response = await this.client.post(`/task/${taskId}`, taskData);
+      // TickTick nécessite POST /open/v1/task/${taskId} avec id, projectId, title obligatoires
+      const response = await this.client.post(`/open/v1/task/${taskId}`, taskData);
 
       logger.info(`Tâche mise à jour: ${taskId}`);
 
@@ -423,9 +423,26 @@ class TickTickAPI {
   async updateMultipleTasks(taskIds, updateData) {
     const results = [];
 
+    // Récupérer toutes les tâches une seule fois pour avoir les champs obligatoires
+    const allTasks = await this.getTasks();
+    const taskMap = new Map(allTasks.map(t => [t.id, t]));
+
     for (const taskId of taskIds) {
       try {
-        const result = await this.updateTask(taskId, updateData, true); // skipCacheClear
+        const existingTask = taskMap.get(taskId);
+        if (!existingTask) {
+          throw new Error(`Task ${taskId} not found`);
+        }
+
+        // Fusionner avec les champs obligatoires (id, projectId, title)
+        const completeData = {
+          id: existingTask.id,
+          projectId: existingTask.projectId,
+          title: existingTask.title,
+          ...updateData
+        };
+
+        const result = await this.updateTask(taskId, completeData, true); // skipCacheClear
         results.push({ taskId, success: true, data: result });
       } catch (error) {
         results.push({ taskId, success: false, error: error.message });
