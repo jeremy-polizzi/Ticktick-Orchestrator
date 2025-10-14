@@ -64,4 +64,4 @@ data/backup/
 pids/
 *.pid
 *.seed
-*.pid.lock
+*.pid.lock.claude/mcp.json
