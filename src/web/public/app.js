@@ -856,21 +856,22 @@ class OrchestratorApp {
 
         if (!confirmed) return;
 
-        this.showLoading('🧹 Nettoyage des horaires en cours...');
+        this.showLoading('🧹 Démarrage nettoyage...');
         try {
             const result = await this.apiCall('/api/scheduler/clean-times', 'POST');
 
-            this.showAlert(`✅ ${result.tasksCleaned} horaires nettoyés - Toutes les tâches sont maintenant "toute la journée"`, 'success');
-
-            console.log('Horaires nettoyés:', result);
-
-            // Rafraîchir automatiquement après nettoyage
-            setTimeout(() => this.refreshScheduler(), 2000);
-        } catch (error) {
-            this.showAlert('Erreur lors du nettoyage des horaires: ' + (error.message || 'Erreur inconnue'), 'danger');
-            console.error('Erreur cleanTimes:', error);
-        } finally {
             this.hideLoading();
+
+            this.showAlert('🧹 Nettoyage des horaires lancé - Voir "Activité en Temps Réel" pour le suivi', 'info');
+
+            console.log('Nettoyage horaires lancé:', result);
+
+            // Rafraîchir automatiquement pour voir l'activité
+            setTimeout(() => this.refreshScheduler(), 1000);
+        } catch (error) {
+            this.hideLoading();
+            this.showAlert('Erreur lors du lancement du nettoyage: ' + (error.message || 'Erreur inconnue'), 'danger');
+            console.error('Erreur cleanTimes:', error);
         }
     }
 

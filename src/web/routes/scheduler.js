@@ -319,79 +319,113 @@ router.post('/clean-times', async (req, res) => {
     logger.info('🧹 Nettoyage horaires déclenché via API - Conversion toutes tâches en all-day');
 
     const TickTickAPI = require('../../api/ticktick-api');
-    const ticktick = new TickTickAPI();
+    const { getInstance: getActivityTracker } = require('../../orchestrator/activity-tracker');
 
-    await ticktick.loadTokens();
+    // Exécuter de manière asynchrone pour éviter timeout
+    (async () => {
+      const tracker = getActivityTracker();
+      const ticktick = new TickTickAPI();
 
-    // Récupérer toutes les tâches
-    const allTasks = await ticktick.getTasks();
-    logger.info(`📊 ${allTasks.length} tâches récupérées`);
-
-    // Filtrer tâches avec horaires (isAllDay: false et dueDate défini)
-    const tasksWithTimes = allTasks.filter(t =>
-      t.dueDate && !t.isAllDay && !t.isCompleted && t.status !== 2
-    );
-
-    logger.info(`🕒 ${tasksWithTimes.length} tâches avec horaires trouvées`);
-
-    if (tasksWithTimes.length === 0) {
-      return res.json({
-        success: true,
-        message: '✅ Aucune tâche avec horaire à nettoyer',
-        tasksCleaned: 0,
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // Nettoyer les horaires (batch 10 + pause 15s pour rate limiting)
-    let cleaned = 0;
-    const batchSize = 10;
-    const pauseDuration = 15000; // 15 secondes
-
-    for (let i = 0; i < tasksWithTimes.length; i++) {
       try {
-        const task = tasksWithTimes[i];
+        await ticktick.loadTokens();
 
-        // Extraire juste la date (sans heure)
-        const dateOnly = task.dueDate.split('T')[0]; // "2025-10-15"
-        const dueDateAllDay = `${dateOnly}T00:00:00+0000`;
+        tracker.startActivity('clean-times', '🧹 Nettoyage des horaires');
+        tracker.addStep('fetch', '📊 Récupération des tâches');
 
-        await ticktick.updateTask(task.id, {
-          id: task.id,
-          projectId: task.projectId,
-          title: task.title,
-          dueDate: dueDateAllDay,
-          isAllDay: true
-        });
+        // Récupérer toutes les tâches
+        const allTasks = await ticktick.getTasks();
+        logger.info(`📊 ${allTasks.length} tâches récupérées`);
 
-        cleaned++;
-        logger.info(`✅ [${cleaned}/${tasksWithTimes.length}] Nettoyé: "${task.title}"`);
+        // Filtrer tâches avec horaires (isAllDay: false et dueDate défini)
+        const tasksWithTimes = allTasks.filter(t =>
+          t.dueDate && !t.isAllDay && !t.isCompleted && t.status !== 2
+        );
 
-        // Pause tous les 10 tâches
-        if ((i + 1) % batchSize === 0 && i + 1 < tasksWithTimes.length) {
-          logger.info(`⏸️  Pause 15s après ${cleaned} tâches (rate limiting)...`);
-          await new Promise(resolve => setTimeout(resolve, pauseDuration));
+        logger.info(`🕒 ${tasksWithTimes.length} tâches avec horaires trouvées`);
+
+        if (tasksWithTimes.length === 0) {
+          tracker.completeActivity({
+            tasksCleaned: 0,
+            message: 'Aucune tâche avec horaire à nettoyer'
+          });
+          return;
         }
 
+        tracker.addStep('cleaning', `🧹 Nettoyage de ${tasksWithTimes.length} horaires`);
+
+        // Nettoyer les horaires (batch 10 + pause 15s pour rate limiting)
+        let cleaned = 0;
+        const batchSize = 10;
+        const pauseDuration = 15000; // 15 secondes
+
+        for (let i = 0; i < tasksWithTimes.length; i++) {
+          try {
+            const task = tasksWithTimes[i];
+
+            // Extraire juste la date (sans heure)
+            const dateOnly = task.dueDate.split('T')[0]; // "2025-10-15"
+            const dueDateAllDay = `${dateOnly}T00:00:00+0000`;
+
+            await ticktick.updateTask(task.id, {
+              id: task.id,
+              projectId: task.projectId,
+              title: task.title,
+              dueDate: dueDateAllDay,
+              isAllDay: true
+            });
+
+            cleaned++;
+
+            // Update tracker avec progrès
+            tracker.updateActivityDetails({
+              currentTask: `"${task.title.substring(0, 40)}..."`,
+              progress: `${cleaned}/${tasksWithTimes.length}`,
+              successCount: cleaned
+            });
+
+            logger.info(`✅ [${cleaned}/${tasksWithTimes.length}] Nettoyé: "${task.title}"`);
+
+            // Pause tous les 10 tâches
+            if ((i + 1) % batchSize === 0 && i + 1 < tasksWithTimes.length) {
+              logger.info(`⏸️  Pause 15s après ${cleaned} tâches (rate limiting)...`);
+              tracker.updateActivityDetails({
+                currentTask: '⏸️ Pause (rate limiting)...',
+                progress: `${cleaned}/${tasksWithTimes.length}`
+              });
+              await new Promise(resolve => setTimeout(resolve, pauseDuration));
+            }
+
+          } catch (error) {
+            logger.error(`❌ Erreur nettoyage tâche ${task.id}:`, error.message);
+          }
+        }
+
+        logger.info(`✅ Nettoyage horaires terminé: ${cleaned}/${tasksWithTimes.length} tâches converties en all-day`);
+
+        tracker.completeActivity({
+          tasksCleaned: cleaned,
+          tasksTotal: tasksWithTimes.length,
+          message: `${cleaned} horaires nettoyés`
+        });
+
       } catch (error) {
-        logger.error(`❌ Erreur nettoyage tâche ${task.id}:`, error.message);
+        logger.error('❌ Erreur nettoyage horaires:', error.message);
+        tracker.failActivity(error.message);
       }
-    }
+    })();
 
-    logger.info(`✅ Nettoyage horaires terminé: ${cleaned}/${tasksWithTimes.length} tâches converties en all-day`);
-
+    // Réponse immédiate
     res.json({
       success: true,
-      message: `✅ ${cleaned} horaires nettoyés (toutes les tâches sont maintenant "toute la journée")`,
-      tasksCleaned: cleaned,
-      tasksTotal: tasksWithTimes.length,
+      message: '🧹 Nettoyage des horaires lancé - Visible dans "Activité en Temps Réel"',
+      status: 'running',
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    logger.error('Erreur nettoyage horaires:', error.message);
+    logger.error('Erreur lancement nettoyage horaires:', error.message);
     res.status(500).json({
-      error: 'Erreur lors du nettoyage des horaires',
+      error: 'Erreur lors du lancement du nettoyage',
       details: error.message
     });
   }
