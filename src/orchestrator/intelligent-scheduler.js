@@ -355,14 +355,16 @@ class IntelligentScheduler {
       }
 
       // Créer tâche TickTick avec date optimale
-      // Convertir format date: "2025-10-15" → "2025-10-15T12:00:00+0000"
-      const dueDateISO = `${bestSlot.date}T12:00:00+0000`;
+      // Convertir format date: "2025-10-15" → "2025-10-15T00:00:00+0000"
+      // SANS HORAIRE (all-day task)
+      const dueDateISO = `${bestSlot.date}T00:00:00+0000`;
 
       const task = await this.ticktick.createTask({
         title: action.titre,
         content: action.description,
         priority: action.priority.ticktickPriority,
         dueDate: dueDateISO,
+        isAllDay: true,
         tags: ['cap-numerique', 'auto-scheduled']
       });
 
@@ -460,16 +462,18 @@ class IntelligentScheduler {
 
           // Mise à jour avec retry si erreur
           try {
-            // Convertir format date: "2025-10-15" → "2025-10-15T12:00:00+0000"
-            // TickTick API exige format ISO 8601 avec heure et timezone
-            const dueDateISO = `${bestDate}T12:00:00+0000`;
+            // Convertir format date: "2025-10-15" → "2025-10-15T00:00:00+0000"
+            // TickTick API exige format ISO 8601 SANS HORAIRE (all-day task)
+            const dueDateISO = `${bestDate}T00:00:00+0000`;
 
             // TickTick nécessite id, projectId, title en plus de dueDate
+            // isAllDay: true = tâche SANS horaire (toute la journée)
             await this.ticktick.updateTask(task.id, {
               id: task.id,
               projectId: task.projectId,
               title: task.title,
-              dueDate: dueDateISO
+              dueDate: dueDateISO,
+              isAllDay: true
             });
 
             // Succès (si pas d'erreur thrown)
@@ -722,15 +726,18 @@ class IntelligentScheduler {
     const bestDate = this.selectLeastLoadedDay(priority, loadByDay);
 
     if (bestDate) {
-      // Convertir format date: "2025-10-15" → "2025-10-15T12:00:00+0000"
-      const dueDateISO = `${bestDate}T12:00:00+0000`;
+      // Convertir format date: "2025-10-15" → "2025-10-15T00:00:00+0000"
+      // TickTick API exige format ISO 8601 SANS HORAIRE (all-day task)
+      const dueDateISO = `${bestDate}T00:00:00+0000`;
 
       // TickTick nécessite id, projectId, title en plus de dueDate
+      // isAllDay: true = tâche SANS horaire (toute la journée)
       await this.ticktick.updateTask(task.id, {
         id: task.id,
         projectId: task.projectId,
         title: task.title,
-        dueDate: dueDateISO
+        dueDate: dueDateISO,
+        isAllDay: true
       });
 
       // Mettre à jour loadByDay localement

@@ -851,6 +851,29 @@ class OrchestratorApp {
         }
     }
 
+    async cleanTimes() {
+        const confirmed = confirm('🕒 Nettoyer TOUS les horaires des tâches?\n\nCela va:\n- Retirer les heures de TOUTES les tâches TickTick\n- Convertir en tâches "toute la journée" (all-day)\n- Garder uniquement la date (sans heure)\n\nExemple: "2025-10-15 14:30" → "2025-10-15 (toute la journée)"\n\nContinuer?');
+
+        if (!confirmed) return;
+
+        this.showLoading('🧹 Nettoyage des horaires en cours...');
+        try {
+            const result = await this.apiCall('/api/scheduler/clean-times', 'POST');
+
+            this.showAlert(`✅ ${result.tasksCleaned} horaires nettoyés - Toutes les tâches sont maintenant "toute la journée"`, 'success');
+
+            console.log('Horaires nettoyés:', result);
+
+            // Rafraîchir automatiquement après nettoyage
+            setTimeout(() => this.refreshScheduler(), 2000);
+        } catch (error) {
+            this.showAlert('Erreur lors du nettoyage des horaires: ' + (error.message || 'Erreur inconnue'), 'danger');
+            console.error('Erreur cleanTimes:', error);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
     async generateReport() {
         this.showLoading();
         try {
@@ -1590,6 +1613,7 @@ window.runScheduler = () => app.runScheduler();
 window.analyzeAirtable = () => app.analyzeAirtable();
 window.continuousAdjust = () => app.continuousAdjust();
 window.cleanCalendar = () => app.cleanCalendar();
+window.cleanTimes = () => app.cleanTimes();
 window.generateReport = () => app.generateReport();
 window.refreshScheduler = () => app.refreshScheduler();
 window.showAuthModal = () => app.showAuthModal();

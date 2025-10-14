@@ -313,6 +313,90 @@ router.post('/clean-calendar', async (req, res) => {
   }
 });
 
+// Nettoyer les horaires de toutes les tâches (isAllDay: true)
+router.post('/clean-times', async (req, res) => {
+  try {
+    logger.info('🧹 Nettoyage horaires déclenché via API - Conversion toutes tâches en all-day');
+
+    const TickTickAPI = require('../../api/ticktick-api');
+    const ticktick = new TickTickAPI();
+
+    await ticktick.loadTokens();
+
+    // Récupérer toutes les tâches
+    const allTasks = await ticktick.getTasks();
+    logger.info(`📊 ${allTasks.length} tâches récupérées`);
+
+    // Filtrer tâches avec horaires (isAllDay: false et dueDate défini)
+    const tasksWithTimes = allTasks.filter(t =>
+      t.dueDate && !t.isAllDay && !t.isCompleted && t.status !== 2
+    );
+
+    logger.info(`🕒 ${tasksWithTimes.length} tâches avec horaires trouvées`);
+
+    if (tasksWithTimes.length === 0) {
+      return res.json({
+        success: true,
+        message: '✅ Aucune tâche avec horaire à nettoyer',
+        tasksCleaned: 0,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Nettoyer les horaires (batch 10 + pause 15s pour rate limiting)
+    let cleaned = 0;
+    const batchSize = 10;
+    const pauseDuration = 15000; // 15 secondes
+
+    for (let i = 0; i < tasksWithTimes.length; i++) {
+      try {
+        const task = tasksWithTimes[i];
+
+        // Extraire juste la date (sans heure)
+        const dateOnly = task.dueDate.split('T')[0]; // "2025-10-15"
+        const dueDateAllDay = `${dateOnly}T00:00:00+0000`;
+
+        await ticktick.updateTask(task.id, {
+          id: task.id,
+          projectId: task.projectId,
+          title: task.title,
+          dueDate: dueDateAllDay,
+          isAllDay: true
+        });
+
+        cleaned++;
+        logger.info(`✅ [${cleaned}/${tasksWithTimes.length}] Nettoyé: "${task.title}"`);
+
+        // Pause tous les 10 tâches
+        if ((i + 1) % batchSize === 0 && i + 1 < tasksWithTimes.length) {
+          logger.info(`⏸️  Pause 15s après ${cleaned} tâches (rate limiting)...`);
+          await new Promise(resolve => setTimeout(resolve, pauseDuration));
+        }
+
+      } catch (error) {
+        logger.error(`❌ Erreur nettoyage tâche ${task.id}:`, error.message);
+      }
+    }
+
+    logger.info(`✅ Nettoyage horaires terminé: ${cleaned}/${tasksWithTimes.length} tâches converties en all-day`);
+
+    res.json({
+      success: true,
+      message: `✅ ${cleaned} horaires nettoyés (toutes les tâches sont maintenant "toute la journée")`,
+      tasksCleaned: cleaned,
+      tasksTotal: tasksWithTimes.length,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Erreur nettoyage horaires:', error.message);
+    res.status(500).json({
+      error: 'Erreur lors du nettoyage des horaires',
+      details: error.message
+    });
+  }
+});
+
 // Lancer une synchronisation manuelle
 router.post('/sync', async (req, res) => {
   try {
