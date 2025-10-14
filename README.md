@@ -29,14 +29,37 @@
 
 ## 🚀 Installation VPS (Production)
 
+### Installation Automatique (Recommandée) ⚡
+
+**Une seule commande pour tout installer:**
+
+```bash
+git clone https://github.com/jeremy-polizzi/Ticktick-Orchestrator.git
+cd Ticktick-Orchestrator
+chmod +x install.sh
+./install.sh
+```
+
+Le script installe automatiquement:
+- ✅ Node.js 18+ (si absent)
+- ✅ Dépendances NPM
+- ✅ Configuration .env
+- ✅ PM2 + démarrage auto
+- ✅ Dossiers data/
+
+**Après installation:**
+1. Éditer `.env` avec vos clés API
+2. Accéder à `http://VOTRE_IP:3000`
+3. Configurer OAuth TickTick & Google
+
 ### Prérequis
 - Ubuntu 20.04+ / Debian 11+
-- Node.js 18+
-- Nginx
-- Certbot (Let's Encrypt)
-- Domaine ou sous-domaine pointant vers votre VPS
+- Accès root ou sudo
+- (Optionnel) Domaine pour HTTPS
 
-### Installation Complète
+### Installation Manuelle (Avancée)
+
+Si vous préférez installer manuellement:
 
 ```bash
 # 1. Installer Node.js 18+
@@ -54,7 +77,13 @@ npm install --production
 cp .env.example .env
 nano .env  # Éditer avec vos clés API
 
-# 5. Installer et configurer Nginx + SSL
+# 5. Installer et configurer PM2
+npm install -g pm2
+pm2 start ecosystem.config.js
+pm2 save
+pm2 startup
+
+# 6. (Optionnel) Installer Nginx + SSL
 sudo apt-get install -y nginx certbot python3-certbot-nginx
 
 # Créer le fichier de configuration Nginx
