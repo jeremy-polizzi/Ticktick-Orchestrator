@@ -312,6 +312,26 @@ tar -xzf backup-20240101.tar.gz
 - ✅ Vérifiez les logs : `pm2 logs ticktick-orchestrator`
 - ✅ Redémarrez : `pm2 restart ticktick-orchestrator`
 
+## 🔧 Corrections Récentes
+
+### ✅ Fix TickTick updateTask (2025-10-14)
+
+**Problème résolu:** L'API TickTick acceptait les mises à jour (HTTP 200 OK) mais ne sauvegardait pas les modifications.
+
+**Solution:** TickTick nécessite obligatoirement 3 champs pour toute modification:
+```javascript
+{
+  id: "task_id",           // ✅ OBLIGATOIRE
+  projectId: "project_id", // ✅ OBLIGATOIRE
+  title: "Task title",     // ✅ OBLIGATOIRE
+  dueDate: "2025-10-15T12:00:00+0000"  // + modifications
+}
+```
+
+**Impact:** L'orchestrateur peut maintenant réellement assigner et modifier les dates des tâches TickTick.
+
+📖 **Documentation complète:** [docs/TICKTICK-UPDATE-FIX.md](docs/TICKTICK-UPDATE-FIX.md)
+
 ## 🤝 Contribution
 
 Ce projet suit les standards **GitHub Flow** avec protection de la branche `main`.
