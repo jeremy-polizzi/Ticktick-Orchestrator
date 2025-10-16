@@ -459,9 +459,13 @@ IMPORTANT: Réponds UNIQUEMENT en JSON valide, sans texte avant ou après.
           result
         });
 
-        // ✅ CACHE GARDÉ - Le TTL de 2 minutes suffit pour éviter rate limit
-        // L'invalidation systématique forçait 52+ requêtes API (26 projets × 2) après chaque action
-        // Maintenant le cache reste valide jusqu'à expiration naturelle (2min)
+        // ✅ INVALIDATION SÉLECTIVE DU CACHE
+        // Invalider SEULEMENT après create/update/delete de tâches
+        // Évite que les tâches créées soient invisibles, mais sans flood API
+        if (result.success && ['create_task', 'update_task', 'delete_task'].includes(action.type)) {
+          this.contextCache = null;
+          logger.info(`🔄 Cache invalidé après ${action.type}`);
+        }
 
       } catch (error) {
         logger.error(`Erreur exécution action ${action.type}:`, error.message);
