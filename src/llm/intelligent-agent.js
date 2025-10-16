@@ -1,4 +1,5 @@
 const Groq = require('groq-sdk');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const TickTickAPI = require('../api/ticktick-api');
 const GoogleCalendarAPI = require('../api/google-calendar-api');
 const AirtableAPI = require('../api/airtable-api');
@@ -10,13 +11,14 @@ const logger = require('../utils/logger');
 /**
  * LLM Intelligent Agent - Superintelligence pour gérer TickTick
  *
- * Utilise GROQ (Llama 3.1 70B) - 100% gratuit
+ * Utilise GROQ (Llama 3.3 70B) avec fallback automatique sur Google Gemini
  * Connaît la mission Plus-de-Clients
  * A accès à TOUS les outils
  */
 class IntelligentAgent {
   constructor() {
     this.groq = null;
+    this.gemini = null;
     this.ticktick = new TickTickAPI();
     this.googleCalendar = new GoogleCalendarAPI();
     this.airtable = new AirtableAPI();
@@ -34,13 +36,28 @@ class IntelligentAgent {
 
   async initialize() {
     try {
-      // Initialiser GROQ
-      const apiKey = process.env.GROQ_API_KEY;
-      if (!apiKey) {
-        throw new Error('GROQ_API_KEY non configurée dans .env');
+      // Initialiser GROQ (principal)
+      const groqApiKey = process.env.GROQ_API_KEY;
+      if (groqApiKey) {
+        this.groq = new Groq({ apiKey: groqApiKey });
+        logger.info('✅ GROQ initialisé (Llama 3.3 70B)');
+      } else {
+        logger.warn('⚠️  GROQ_API_KEY non configurée');
       }
 
-      this.groq = new Groq({ apiKey });
+      // Initialiser Google Gemini (fallback)
+      const geminiApiKey = process.env.GEMINI_API_KEY;
+      if (geminiApiKey) {
+        const genAI = new GoogleGenerativeAI(geminiApiKey);
+        this.gemini = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+        logger.info('✅ Google Gemini initialisé (fallback)');
+      } else {
+        logger.warn('⚠️  GEMINI_API_KEY non configurée');
+      }
+
+      if (!this.groq && !this.gemini) {
+        throw new Error('Aucun LLM configuré (GROQ_API_KEY ou GEMINI_API_KEY requis)');
+      }
 
       // Initialiser les APIs
       await this.airtable.initialize();
@@ -48,12 +65,80 @@ class IntelligentAgent {
       await this.googleCalendar.loadTokens();
       await this.scheduler.initialize();
 
-      logger.info('IntelligentAgent initialisé avec GROQ (Llama 3.3 70B)');
+      logger.info('IntelligentAgent initialisé avec succès');
       return true;
     } catch (error) {
       logger.error('Erreur initialisation IntelligentAgent:', error.message);
       return false;
     }
+  }
+
+  /**
+   * Appelle le LLM avec fallback automatique GROQ → Gemini
+   */
+  async callLLM(messages) {
+    // Essayer GROQ d'abord
+    if (this.groq) {
+      try {
+        const completion = await this.groq.chat.completions.create({
+          model: 'llama-3.3-70b-versatile',
+          messages,
+          temperature: 0.3,
+          max_tokens: 2000,
+          top_p: 1
+        });
+        logger.info('🟢 Réponse via GROQ (Llama 3.3 70B)');
+        return completion.choices[0]?.message?.content || '';
+      } catch (error) {
+        // Rate limit ou erreur GROQ → Basculer sur Gemini
+        if (error.message.includes('rate_limit') || error.message.includes('429')) {
+          logger.warn('⚠️  GROQ rate limit atteint, bascule sur Gemini...');
+        } else {
+          logger.error(`❌ Erreur GROQ: ${error.message}`);
+        }
+
+        // Fallback sur Gemini
+        if (!this.gemini) {
+          throw new Error('GROQ indisponible et Gemini non configuré');
+        }
+      }
+    }
+
+    // Utiliser Gemini (fallback ou principal si GROQ absent)
+    if (this.gemini) {
+      try {
+        // Convertir format OpenAI → Gemini
+        const geminiMessages = messages
+          .filter(m => m.role !== 'system') // Gemini n'a pas de role system
+          .map(m => ({
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: m.content }]
+          }));
+
+        // Ajouter system prompt au premier message user
+        const systemMessage = messages.find(m => m.role === 'system');
+        if (systemMessage && geminiMessages.length > 0) {
+          geminiMessages[0].parts[0].text = `${systemMessage.content}\n\n${geminiMessages[0].parts[0].text}`;
+        }
+
+        const chat = this.gemini.startChat({
+          history: geminiMessages.slice(0, -1),
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 2000,
+          },
+        });
+
+        const result = await chat.sendMessage(geminiMessages[geminiMessages.length - 1].parts[0].text);
+        logger.info('🔵 Réponse via Google Gemini (fallback)');
+        return result.response.text();
+      } catch (error) {
+        logger.error(`❌ Erreur Gemini: ${error.message}`);
+        throw error;
+      }
+    }
+
+    throw new Error('Aucun LLM disponible');
   }
 
   /**
@@ -69,16 +154,8 @@ class IntelligentAgent {
       // 2. Construire le prompt pour le LLM
       const messages = this.buildMessages(userMessage, context);
 
-      // 3. Appeler GROQ pour analyser et décider des actions
-      const completion = await this.groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile', // Nouveau modèle GROQ (remplace llama-3.1)
-        messages,
-        temperature: 0.3, // Précis, moins créatif
-        max_tokens: 2000,
-        top_p: 1
-      });
-
-      const llmResponse = completion.choices[0]?.message?.content || '';
+      // 3. Appeler LLM avec fallback automatique GROQ → Gemini
+      const llmResponse = await this.callLLM(messages);
       logger.info(`🤖 Réponse LLM: ${llmResponse.substring(0, 200)}...`);
 
       // 4. Extraire les actions du LLM
