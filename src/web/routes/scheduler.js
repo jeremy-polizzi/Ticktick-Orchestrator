@@ -252,6 +252,68 @@ router.post('/inbox-cleanup', async (req, res) => {
   }
 });
 
+// 🎯 ORCHESTRATION QUOTIDIENNE COMPLÈTE
+// Système complet qui s'exécute automatiquement chaque jour
+// et peut être lancé manuellement via le bouton du dashboard
+router.post('/daily-orchestration', async (req, res) => {
+  try {
+    logger.info('🎯 Orchestration quotidienne complète déclenchée via API');
+
+    const DailyOrchestrator = require('../../orchestrator/daily-orchestrator');
+    const { getInstance: getActivityTracker } = require('../../orchestrator/activity-tracker');
+
+    // Exécuter de manière asynchrone avec tracking visible
+    (async () => {
+      const tracker = getActivityTracker();
+      const orchestrator = new DailyOrchestrator();
+
+      try {
+        await orchestrator.initialize();
+
+        tracker.startActivity('daily-orchestration', '🎯 Orchestration Quotidienne Complète');
+        tracker.addStep('step1', '📥 Étape 1/2: Nettoyage Inbox avec LLM');
+
+        const report = await orchestrator.performDailyOrchestration();
+
+        if (report.success) {
+          const inboxStep = report.steps.find(s => s.name === 'inbox_cleanup');
+          const adjustStep = report.steps.find(s => s.name === 'continuous_adjust');
+
+          tracker.completeActivity({
+            inboxMoved: inboxStep?.tasksMoved || 0,
+            inboxTotal: inboxStep?.tasksTotal || 0,
+            tasksRescheduled: adjustStep?.tasksRescheduled || 0,
+            conflictsResolved: adjustStep?.conflictsDetected || 0,
+            totalDuration: Math.round(report.totalDuration / 1000),
+            message: `Orchestration réussie en ${Math.round(report.totalDuration / 1000)}s`
+          });
+        } else {
+          tracker.failActivity(report.error || 'Orchestration partielle - voir logs');
+        }
+
+      } catch (error) {
+        logger.error('❌ Erreur orchestration quotidienne:', error.message);
+        tracker.failActivity(error.message);
+      }
+    })();
+
+    // Réponse immédiate
+    res.json({
+      success: true,
+      message: '🎯 Orchestration Quotidienne Complète lancée:\n• Nettoyage Inbox (LLM)\n• Rééquilibrage 60 jours\n• Optimisation week-end/semaine',
+      status: 'running',
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Erreur lancement orchestration quotidienne:', error.message);
+    res.status(500).json({
+      error: 'Erreur lors de l\'orchestration quotidienne',
+      details: error.message
+    });
+  }
+});
+
 // Annuler l'activité en cours
 router.post('/cancel-activity', (req, res) => {
   try {

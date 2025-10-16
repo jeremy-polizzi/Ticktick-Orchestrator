@@ -1,78 +1,52 @@
 #!/usr/bin/env node
 
 /**
- * 🗂️ Script cron pour nettoyage quotidien Inbox
+ * 🎯 Script cron pour ORCHESTRATION QUOTIDIENNE COMPLÈTE
  *
- * S'exécute une fois par jour (matin, après wake-up)
- * Analyse toutes les tâches Inbox et les classe intelligemment dans leurs projets
- * avec estimation durée, priorités, et planification sur 60 jours.
+ * S'exécute une fois par jour (8h du matin)
+ *
+ * WORKFLOW COMPLET:
+ * 1. Nettoyage Inbox (classification LLM intelligente)
+ * 2. Rééquilibrage 60 jours (2-3 tâches/jour max)
+ * 3. Optimisation planning (tâches courtes week-end)
  *
  * RÈGLES STRICTES:
  * - Planification à partir de DEMAIN (jamais aujourd'hui)
  * - Max 2-3 tâches/jour
- * - Tâches courtes le week-end
+ * - Tâches courtes (≤1h) le week-end
+ * - Tâches longues (>2h) en semaine
  * - Répartition équilibrée sur 60 jours
  *
  * Le LLM décide tout: projet, durée, priorité, deadline, tags
  */
 
-const IntelligentAgent = require('../src/llm/intelligent-agent');
+const DailyOrchestrator = require('../src/orchestrator/daily-orchestrator');
 const logger = require('../src/utils/logger');
 
-async function runDailyInboxCleanup() {
-  logger.info('🗂️ ═══════════════════════════════════════════════════════');
-  logger.info('🗂️ Cron: Démarrage nettoyage quotidien Inbox');
-  logger.info('🗂️ ═══════════════════════════════════════════════════════');
-
+async function runDailyOrchestration() {
   try {
-    const agent = new IntelligentAgent();
+    const orchestrator = new DailyOrchestrator();
 
-    // Initialiser le LLM et les APIs
-    await agent.initialize();
-    logger.info('✅ IntelligentAgent initialisé (GROQ + Gemini fallback)');
+    // Initialiser l'orchestrateur
+    await orchestrator.initialize();
 
-    // Lancer le nettoyage Inbox
-    const result = await agent.processInboxToProjects();
+    // Lancer l'orchestration complète
+    const report = await orchestrator.performDailyOrchestration();
 
-    if (result.success) {
-      logger.info('🗂️ ═══════════════════════════════════════════════════════');
-      logger.info(`🎉 Nettoyage Inbox terminé avec succès!`);
-      logger.info(`📊 Statistiques:`);
-      logger.info(`   - Tâches Inbox trouvées: ${result.total}`);
-      logger.info(`   - Tâches traitées:       ${result.processed}`);
-      logger.info(`   - Tâches déplacées:      ${result.moved}`);
-      logger.info(`   - Échecs:                ${result.failed}`);
-      logger.info('🗂️ ═══════════════════════════════════════════════════════');
-
-      if (result.moved > 0) {
-        logger.info('📋 Aperçu des déplacements:');
-        result.results.slice(0, 5).forEach((r, i) => {
-          if (r.success) {
-            logger.info(`   ${i + 1}. "${r.title}" → ${r.project}`);
-          }
-        });
-        if (result.results.length > 5) {
-          logger.info(`   ... et ${result.results.length - 5} autres`);
-        }
-      }
-
-      // Note sur le rééquilibrage automatique
-      if (result.moved > 0) {
-        logger.info('');
-        logger.info('ℹ️  Note: Le continuous-adjust s\'exécutera automatiquement toutes les 30min');
-        logger.info('   pour rééquilibrer la charge si des tâches sont reportées.');
-      }
+    // Vérifier le résultat et sortir avec le bon code
+    if (report.success) {
+      process.exit(0); // Succès
     } else {
-      logger.error(`❌ Échec nettoyage Inbox: ${result.error}`);
-      process.exit(1);
+      logger.error('⚠️ Orchestration partielle - certaines étapes ont échoué');
+      process.exit(1); // Échec partiel
     }
 
   } catch (error) {
-    logger.error('❌ Cron: Erreur nettoyage Inbox:', error.message);
+    logger.error('❌ Cron: Erreur orchestration quotidienne:', error.message);
     logger.error(error.stack);
     process.exit(1);
   }
 }
 
-// Exécuter le nettoyage
-runDailyInboxCleanup();
+// Exécuter l'orchestration
+runDailyOrchestration();
