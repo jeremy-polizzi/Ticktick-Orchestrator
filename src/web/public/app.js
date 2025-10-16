@@ -1105,26 +1105,31 @@ class OrchestratorApp {
     async continuousAdjust() {
         this.showLoading();
         try {
+            // 🔄 Lancer l'ajustement continu (rééquilibrage 60 jours)
             await this.apiCall('/api/scheduler/continuous-adjust', 'POST');
-            this.showAlert('🔄 Ajustement continu lancé - Visible en temps réel ci-dessous', 'success');
+
+            // 🗂️ Lancer le nettoyage Inbox (classification intelligente LLM)
+            await this.apiCall('/api/scheduler/inbox-cleanup', 'POST');
+
+            this.showAlert('🔄 Ajustement Auto Complet lancé:\n• Rééquilibrage 60 jours (2-3 tâches/jour)\n• Nettoyage Inbox avec LLM\n• Planification intelligente\n\nVisible en temps réel ci-dessous', 'success');
 
             // Charger immédiatement l'activité
             this.loadCurrentActivity();
             this.loadSchedulerActivity();
 
-            // Continuer à rafraîchir toutes les 3 secondes pendant 30 secondes
+            // Continuer à rafraîchir toutes les 3 secondes pendant 60 secondes (Inbox peut prendre plus de temps)
             let refreshCount = 0;
             const refreshInterval = setInterval(() => {
                 this.loadCurrentActivity();
                 this.loadSchedulerActivity();
                 refreshCount++;
 
-                if (refreshCount >= 10) { // 30 secondes (10 * 3s)
+                if (refreshCount >= 20) { // 60 secondes (20 * 3s)
                     clearInterval(refreshInterval);
                 }
             }, 3000);
         } catch (error) {
-            this.showAlert('Erreur lors de l\'ajustement continu', 'danger');
+            this.showAlert('Erreur lors de l\'ajustement automatique', 'danger');
         } finally {
             this.hideLoading();
         }

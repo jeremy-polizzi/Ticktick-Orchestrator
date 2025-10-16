@@ -195,6 +195,63 @@ router.post('/continuous-adjust', async (req, res) => {
   }
 });
 
+// Nettoyage automatique Inbox (classification intelligente avec LLM)
+router.post('/inbox-cleanup', async (req, res) => {
+  try {
+    logger.info('🗂️ Nettoyage Inbox déclenché via API');
+
+    const IntelligentAgent = require('../../llm/intelligent-agent');
+    const { getInstance: getActivityTracker } = require('../../orchestrator/activity-tracker');
+
+    // Exécuter de manière asynchrone avec tracking visible
+    (async () => {
+      const tracker = getActivityTracker();
+      const agent = new IntelligentAgent();
+
+      try {
+        await agent.initialize();
+
+        tracker.startActivity('inbox-cleanup', '🗂️ Nettoyage Inbox');
+        tracker.addStep('analyzing', '🧠 Analyse des tâches Inbox avec le LLM');
+
+        const result = await agent.processInboxToProjects();
+
+        if (result.success) {
+          logger.info(`✅ Nettoyage Inbox terminé: ${result.moved}/${result.total} tâches déplacées`);
+          tracker.completeActivity({
+            tasksTotal: result.total,
+            tasksMoved: result.moved,
+            tasksFailed: result.failed,
+            message: `${result.moved} tâches classées intelligemment`
+          });
+        } else {
+          logger.error(`❌ Échec nettoyage Inbox: ${result.error}`);
+          tracker.failActivity(result.error);
+        }
+
+      } catch (error) {
+        logger.error('❌ Erreur nettoyage Inbox:', error.message);
+        tracker.failActivity(error.message);
+      }
+    })();
+
+    // Réponse immédiate
+    res.json({
+      success: true,
+      message: '🗂️ Nettoyage Inbox lancé - Le LLM analyse et classe intelligemment',
+      status: 'running',
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Erreur lancement nettoyage Inbox:', error.message);
+    res.status(500).json({
+      error: 'Erreur lors du nettoyage Inbox',
+      details: error.message
+    });
+  }
+});
+
 // Annuler l'activité en cours
 router.post('/cancel-activity', (req, res) => {
   try {
