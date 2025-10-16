@@ -770,6 +770,232 @@ IMPORTANT: Réponds UNIQUEMENT en JSON valide, sans texte avant ou après.
 
     return `${summary}\n\n${details}`;
   }
+
+  /**
+   * 🗂️ NETTOYAGE AUTOMATIQUE INBOX
+   *
+   * Analyse toutes les tâches Inbox et les classe intelligemment dans leurs projets
+   * avec répartition sur 60 jours, estimation durée, et planification optimale.
+   *
+   * Exécution quotidienne automatique (cron).
+   */
+  async processInboxToProjects() {
+    try {
+      logger.info('🗂️ Démarrage nettoyage automatique Inbox...');
+
+      // 1. Récupérer toutes les tâches Inbox
+      const allTasks = await this.ticktick.getTasks(null, false);
+      const inboxTasks = allTasks.filter(t => t.projectId && t.projectId.startsWith('inbox'));
+
+      if (inboxTasks.length === 0) {
+        logger.info('✅ Inbox déjà vide, aucune tâche à traiter');
+        return {
+          success: true,
+          processed: 0,
+          message: 'Inbox déjà vide'
+        };
+      }
+
+      logger.info(`📥 ${inboxTasks.length} tâches Inbox à traiter`);
+
+      // 2. Récupérer les projets disponibles
+      const projects = await this.ticktick.getProjects();
+      const projectsList = projects.map(p => `- ${p.name} (id: ${p.id})`).join('\n');
+
+      // 3. Préparer le prompt pour le LLM
+      const systemPrompt = `Tu es un gestionnaire de tâches expert. Tu dois analyser des tâches Inbox et les classer intelligemment.
+
+PROJETS DISPONIBLES:
+${projectsList}
+
+RÈGLES DE CLASSIFICATION:
+1. **Durée estimée**: Analyse le titre/contenu et estime le temps de travail réaliste (15min, 30min, 1h, 2h, 4h, 8h)
+2. **Projet approprié**: Choisis le projet le plus pertinent selon le contexte
+3. **Priorité**: 0=Aucune, 1=Basse, 3=Moyenne, 5=Haute (selon urgence/importance)
+4. **Deadline intelligente**: Répartis sur 60 jours avec charge légère
+   - ⚠️ **RÈGLE CRITIQUE**: TOUTES les tâches doivent être planifiées À PARTIR DE DEMAIN minimum
+   - JAMAIS de tâches pour aujourd'hui
+   - Max 2-3 tâches/jour
+   - Tâches COURTES (≤1h) → Week-end de préférence
+   - Tâches LONGUES (>2h) → Semaine
+   - Urgentes → Cette semaine (demain ou après-demain)
+   - Importantes → Dans 2-7 jours
+   - Normales → Dans 7-60 jours
+5. **Tags**: Ajoute des tags pertinents si nécessaire
+
+CONTRAINTES STRICTES:
+- Répartition équilibrée sur 60 jours
+- Pas plus de 2-3 tâches par jour
+- Tâches courtes le week-end
+- Respect des priorités business
+
+FORMAT RÉPONSE (JSON strict):
+{
+  "tasks": [
+    {
+      "taskId": "id_tache",
+      "title": "titre",
+      "projectId": "id_projet_choisi",
+      "projectName": "nom_projet",
+      "priority": 3,
+      "estimatedMinutes": 60,
+      "dueDate": "2025-10-20",
+      "tags": ["tag1", "tag2"],
+      "reasoning": "Courte explication du choix"
+    }
+  ]
+}`;
+
+      // 4. Diviser en batches de 10 tâches pour éviter timeout LLM
+      const BATCH_SIZE = 10;
+      const batches = [];
+      for (let i = 0; i < inboxTasks.length; i += BATCH_SIZE) {
+        batches.push(inboxTasks.slice(i, i + BATCH_SIZE));
+      }
+
+      let processedCount = 0;
+      let movedCount = 0;
+      const results = [];
+
+      // 5. Traiter chaque batch
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        logger.info(`📦 Traitement batch ${batchIndex + 1}/${batches.length} (${batch.length} tâches)`);
+
+        // Préparer la liste des tâches pour le LLM
+        const tasksPrompt = batch.map(t => {
+          return `{
+  "taskId": "${t.id}",
+  "title": "${t.title || t.content || '[Sans titre]'}",
+  "content": "${(t.content || '').substring(0, 200)}",
+  "currentPriority": ${t.priority || 0},
+  "tags": ${JSON.stringify(t.tags || [])}
+}`;
+        }).join(',\n');
+
+        const userPrompt = `Analyse et classe ces tâches Inbox:\n\n[${tasksPrompt}]`;
+
+        // Appeler le LLM
+        const messages = [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ];
+
+        try {
+          const response = await this.callLLM(messages);
+          logger.info(`🤖 Réponse LLM batch ${batchIndex + 1}: ${response.substring(0, 200)}...`);
+
+          // Parser la réponse JSON
+          const jsonMatch = response.match(/\{[\s\S]*"tasks"[\s\S]*\}/);
+          if (!jsonMatch) {
+            logger.error('❌ Réponse LLM invalide (pas de JSON trouvé)');
+            continue;
+          }
+
+          const classification = JSON.parse(jsonMatch[0]);
+
+          if (!classification.tasks || !Array.isArray(classification.tasks)) {
+            logger.error('❌ Format JSON invalide (tasks manquant)');
+            continue;
+          }
+
+          // 6. Appliquer les classifications
+          for (const taskClass of classification.tasks) {
+            try {
+              const originalTask = batch.find(t => t.id === taskClass.taskId);
+              if (!originalTask) {
+                logger.warn(`⚠️ Tâche ${taskClass.taskId} introuvable`);
+                continue;
+              }
+
+              // Préparer les mises à jour
+              const updates = {
+                projectId: taskClass.projectId,
+                priority: taskClass.priority || originalTask.priority
+              };
+
+              // Ajouter deadline si définie
+              if (taskClass.dueDate) {
+                updates.dueDate = `${taskClass.dueDate}T00:00:00+0000`;
+                updates.isAllDay = true;
+              }
+
+              // Ajouter tags si définis
+              if (taskClass.tags && taskClass.tags.length > 0) {
+                updates.tags = taskClass.tags;
+              }
+
+              // Ajouter estimation durée dans le contenu
+              if (taskClass.estimatedMinutes) {
+                const hours = Math.floor(taskClass.estimatedMinutes / 60);
+                const mins = taskClass.estimatedMinutes % 60;
+                const durationText = hours > 0
+                  ? `${hours}h${mins > 0 ? mins : ''}`
+                  : `${mins}min`;
+
+                updates.content = (originalTask.content || '') +
+                  `\n\n⏱️ Durée estimée: ${durationText}`;
+              }
+
+              // Déplacer la tâche
+              await this.ticktick.updateTask(originalTask.id, updates);
+
+              logger.info(`✅ Tâche déplacée: "${taskClass.title}" → ${taskClass.projectName} (${taskClass.estimatedMinutes}min, priorité ${taskClass.priority})`);
+              logger.info(`   💡 Raison: ${taskClass.reasoning}`);
+
+              movedCount++;
+              results.push({
+                taskId: originalTask.id,
+                title: taskClass.title,
+                project: taskClass.projectName,
+                success: true
+              });
+
+            } catch (error) {
+              logger.error(`❌ Erreur déplacement tâche ${taskClass.taskId}:`, error.message);
+              results.push({
+                taskId: taskClass.taskId,
+                title: taskClass.title,
+                success: false,
+                error: error.message
+              });
+            }
+
+            processedCount++;
+          }
+
+          // Attendre un peu entre les batches pour éviter rate limit
+          if (batchIndex < batches.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+
+        } catch (error) {
+          logger.error(`❌ Erreur traitement batch ${batchIndex + 1}:`, error.message);
+        }
+      }
+
+      // 7. Invalider le cache pour refléter les changements
+      this.contextCache = null;
+
+      logger.info(`🎉 Nettoyage Inbox terminé: ${movedCount}/${inboxTasks.length} tâches déplacées`);
+
+      return {
+        success: true,
+        total: inboxTasks.length,
+        processed: processedCount,
+        moved: movedCount,
+        failed: processedCount - movedCount,
+        results
+      };
+
+    } catch (error) {
+      logger.error('❌ Erreur processInboxToProjects:', error.message);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
 }
 
 module.exports = IntelligentAgent;
