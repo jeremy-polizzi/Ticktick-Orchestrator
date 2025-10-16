@@ -64,4 +64,8 @@ data/backup/
 pids/
 *.pid
 *.seed
-*.pid.lock.claude/mcp.json
+*.pid.lock
+
+# Claude Code files (secrets)
+.claude/mcp.json
+.claude/.credentials.json
