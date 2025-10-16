@@ -234,12 +234,285 @@ class OrchestratorApp {
             // Charger les statuts des services
             await this.loadServiceStatus();
 
+            // Charger l'état du système (NOUVEAU)
+            await this.updateSystemStatus();
+
             // Charger les statistiques
             await this.loadStats();
+
+            // Afficher l'historique LLM
+            this.displayLLMHistory();
+
+            // Démarrer auto-refresh temps réel
+            this.startSystemStatusAutoRefresh();
 
         } catch (error) {
             console.error('Error loading dashboard:', error);
             this.showAlert('Erreur lors du chargement du dashboard', 'danger');
+        }
+    }
+
+    startSystemStatusAutoRefresh() {
+        // Clear ancien interval si existe
+        if (this.systemStatusInterval) {
+            clearInterval(this.systemStatusInterval);
+        }
+
+        // Refresh toutes les 5 secondes
+        this.systemStatusInterval = setInterval(async () => {
+            if (this.isAuthenticated) {
+                await this.updateSystemStatus();
+            }
+        }, 5000);
+    }
+
+    async updateSystemStatus() {
+        try {
+            // Appeler l'API status du scheduler
+            const status = await this.apiCall('/api/scheduler/status');
+
+            // 1. État Serveur
+            const serverEl = document.getElementById('systemServerStatus');
+            if (serverEl) {
+                serverEl.innerHTML = `
+                    <span class="status-indicator status-connected"></span>
+                    <span><strong>Actif</strong></span>
+                `;
+            }
+
+            // 2. État Orchestrateur
+            const orchestratorEl = document.getElementById('systemOrchestratorStatus');
+            if (orchestratorEl && status.scheduler) {
+                const isActive = status.scheduler.isActive;
+                const isRunning = status.scheduler.isRunning;
+
+                if (isRunning) {
+                    orchestratorEl.innerHTML = `
+                        <span class="status-indicator" style="background: #ffc107; box-shadow: 0 0 6px rgba(255, 193, 7, 0.5);"></span>
+                        <span><strong>En cours...</strong></span>
+                    `;
+                } else if (isActive) {
+                    orchestratorEl.innerHTML = `
+                        <span class="status-indicator status-connected"></span>
+                        <span><strong>Actif</strong></span>
+                    `;
+                } else {
+                    orchestratorEl.innerHTML = `
+                        <span class="status-indicator status-disconnected"></span>
+                        <span><strong>Inactif</strong></span>
+                    `;
+                }
+            }
+
+            // 3. Activité en cours
+            const activityEl = document.getElementById('systemCurrentActivity');
+            if (activityEl && status.activity) {
+                if (status.activity.currentActivity && status.activity.currentActivity.status === 'in_progress') {
+                    const activity = status.activity.currentActivity;
+                    activityEl.innerHTML = `
+                        <small><strong>${activity.type}</strong></small><br>
+                        <small class="text-muted">${activity.description || ''}</small>
+                    `;
+
+                    // Afficher barre de progression
+                    const progressBar = document.getElementById('systemProgressBar');
+                    const progressLabel = document.getElementById('systemProgressLabel');
+                    const progressBarInner = document.getElementById('systemProgressBarInner');
+
+                    if (progressBar && progressLabel && progressBarInner) {
+                        progressBar.classList.remove('d-none');
+                        const progress = activity.progress || 0;
+                        progressLabel.textContent = `Progression: ${progress}%`;
+                        progressBarInner.style.width = `${progress}%`;
+                        progressBarInner.textContent = `${progress}%`;
+                        progressBarInner.setAttribute('aria-valuenow', progress);
+                    }
+
+                    // Afficher aussi dans la zone "Activités en arrière-plan"
+                    this.updateBackgroundActivities(activity);
+                } else {
+                    activityEl.innerHTML = `<small class="text-muted">Aucune activité</small>`;
+
+                    // Cacher barre de progression
+                    const progressBar = document.getElementById('systemProgressBar');
+                    if (progressBar) {
+                        progressBar.classList.add('d-none');
+                    }
+
+                    // Cacher les activités en arrière-plan
+                    this.hideBackgroundActivities();
+                }
+            }
+
+            // 4. Santé système
+            const healthEl = document.getElementById('systemHealth');
+            if (healthEl && status.connections) {
+                const ticktick = status.connections.ticktick;
+                const google = status.connections.google;
+                const overall = ticktick && google;
+
+                if (overall) {
+                    healthEl.innerHTML = `
+                        <span class="status-indicator status-connected"></span>
+                        <span><strong>Excellent</strong></span>
+                    `;
+                } else if (ticktick || google) {
+                    healthEl.innerHTML = `
+                        <span class="status-indicator" style="background: #ffc107;"></span>
+                        <span><strong>Partiel</strong></span>
+                    `;
+                } else {
+                    healthEl.innerHTML = `
+                        <span class="status-indicator status-disconnected"></span>
+                        <span><strong>Problème</strong></span>
+                    `;
+                }
+            }
+
+            // 5. Dernière exécution
+            const lastRunEl = document.getElementById('systemLastRun');
+            if (lastRunEl && status.scheduler && status.scheduler.lastRun) {
+                const lastRun = new Date(status.scheduler.lastRun);
+                const now = new Date();
+                const diffMs = now - lastRun;
+                const diffMins = Math.floor(diffMs / 60000);
+
+                let timeAgo = '';
+                if (diffMins < 1) {
+                    timeAgo = 'À l\'instant';
+                } else if (diffMins < 60) {
+                    timeAgo = `Il y a ${diffMins} min`;
+                } else {
+                    const hours = Math.floor(diffMins / 60);
+                    timeAgo = `Il y a ${hours}h${diffMins % 60}min`;
+                }
+
+                lastRunEl.innerHTML = `
+                    <small>${lastRun.toLocaleString('fr-FR')}</small><br>
+                    <small class="text-muted">${timeAgo}</small>
+                `;
+            } else if (lastRunEl) {
+                lastRunEl.innerHTML = `<small class="text-muted">Jamais</small>`;
+            }
+
+            // 6. Prochaine exécution
+            const nextRunEl = document.getElementById('systemNextRun');
+            if (nextRunEl && status.scheduler && status.scheduler.nextRun) {
+                const nextRun = new Date(status.scheduler.nextRun);
+                const now = new Date();
+                const diffMs = nextRun - now;
+                const diffMins = Math.floor(diffMs / 60000);
+
+                let timeUntil = '';
+                if (diffMins < 60) {
+                    timeUntil = `Dans ${diffMins} min`;
+                } else {
+                    const hours = Math.floor(diffMins / 60);
+                    timeUntil = `Dans ${hours}h${diffMins % 60}min`;
+                }
+
+                nextRunEl.innerHTML = `
+                    <small>${nextRun.toLocaleString('fr-FR')}</small><br>
+                    <small class="text-muted">${timeUntil}</small>
+                `;
+            } else if (nextRunEl) {
+                nextRunEl.innerHTML = `<small class="text-muted">Non programmée</small>`;
+            }
+
+        } catch (error) {
+            console.error('Erreur updateSystemStatus:', error);
+
+            // Afficher erreur dans le dashboard
+            const serverEl = document.getElementById('systemServerStatus');
+            if (serverEl) {
+                serverEl.innerHTML = `
+                    <span class="status-indicator status-disconnected"></span>
+                    <span><strong>Erreur</strong></span>
+                `;
+            }
+        }
+    }
+
+    updateBackgroundActivities(activity) {
+        const bgActivitiesDiv = document.getElementById('backgroundActivities');
+        const bgActivitiesList = document.getElementById('backgroundActivitiesList');
+
+        if (!bgActivitiesDiv || !bgActivitiesList) return;
+
+        // Afficher la zone
+        bgActivitiesDiv.style.display = 'block';
+
+        // Construire le HTML de l'activité
+        const activityTypeLabel = {
+            'continuous_adjustment': '🔄 Rééquilibrage sur 60 jours',
+            'classification': '🗂️ Reclassification des tâches',
+            'date_assignment': '📅 Attribution des dates',
+            'conflict_resolution': '⚠️ Résolution des conflits'
+        };
+
+        const label = activityTypeLabel[activity.type] || activity.description || activity.type;
+        const progress = activity.progress || 0;
+
+        bgActivitiesList.innerHTML = `
+            <div class="d-flex align-items-center gap-3">
+                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                    <span class="visually-hidden">Chargement...</span>
+                </div>
+                <div class="flex-grow-1">
+                    <div><strong>${label}</strong></div>
+                    <div class="progress mt-2" style="height: 20px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                             role="progressbar"
+                             style="width: ${progress}%"
+                             aria-valuenow="${progress}"
+                             aria-valuemin="0"
+                             aria-valuemax="100">${progress}%</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    showBackgroundActivityPlaceholder() {
+        const bgActivitiesDiv = document.getElementById('backgroundActivities');
+        const bgActivitiesList = document.getElementById('backgroundActivitiesList');
+
+        if (!bgActivitiesDiv || !bgActivitiesList) return;
+
+        bgActivitiesDiv.style.display = 'block';
+        bgActivitiesList.innerHTML = `
+            <div class="d-flex align-items-center gap-3">
+                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                    <span class="visually-hidden">Chargement...</span>
+                </div>
+                <div class="flex-grow-1">
+                    <div><strong>⏳ Démarrage de l'orchestration en arrière-plan...</strong></div>
+                    <small class="text-muted">Le traitement va commencer dans quelques secondes</small>
+                </div>
+            </div>
+        `;
+    }
+
+    hideBackgroundActivities() {
+        const bgActivitiesDiv = document.getElementById('backgroundActivities');
+        const bgActivitiesList = document.getElementById('backgroundActivitiesList');
+
+        if (bgActivitiesDiv && bgActivitiesList) {
+            // Afficher un message de succès pendant 5 secondes avant de cacher
+            if (bgActivitiesDiv.style.display !== 'none') {
+                bgActivitiesList.innerHTML = `
+                    <div class="d-flex align-items-center gap-3 text-success">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <div><strong>✅ Activité terminée avec succès !</strong></div>
+                    </div>
+                `;
+
+                // Cacher après 5 secondes
+                setTimeout(() => {
+                    bgActivitiesDiv.style.display = 'none';
+                    this.showAlert('Rééquilibrage terminé ! Tes tâches sont maintenant réparties sur 60 jours.', 'success');
+                }, 5000);
+            }
         }
     }
 
@@ -310,82 +583,107 @@ class OrchestratorApp {
             return;
         }
 
-        this.showLoading();
+        // NE PAS bloquer le dashboard avec showLoading()
+        // Afficher le spinner localement dans la zone de résultat
         resultDiv.innerHTML = `
             <div class="alert alert-info">
                 <div class="spinner-grow spinner-grow-sm me-2"></div>
-                Exécution de la commande...
+                🧠 LLM analyse ta demande et décide des actions...
             </div>
         `;
 
         try {
-            const result = await this.apiCall('/api/tasks/command', 'POST', { command });
+            // Appeler le LLM Agent superintelligent
+            const result = await this.apiCall('/api/llm/command', 'POST', { message: command });
 
             if (result.success) {
-                // Si c'est une action de liste, afficher les tâches
-                if (result.action === 'list' && result.tasks) {
-                    const tasksList = result.tasks.map(task => {
-                        const dueDate = task.dueDate ? new Date(task.dueDate).toLocaleDateString('fr-FR') : 'Pas de date';
-                        const priority = task.priority || 0;
-                        const priorityBadge = priority > 0 ? `<span class="badge bg-danger">P${priority}</span>` : '';
+                // Afficher réponse LLM + résultats actions (utiliser result.results au lieu de result.actions.actions)
+                const actionsHtml = result.results && result.results.length > 0 ? result.results.map(actionResult => {
+                    const resultIcon = actionResult.result && actionResult.result.success ? '✅' : '❌';
 
-                        return `
-                            <div class="border-bottom pb-2 mb-2">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div>
-                                        <strong>${task.title}</strong>
-                                        ${priorityBadge}
-                                    </div>
-                                    <small class="text-muted">${dueDate}</small>
+                    let resultText = '';
+                    if (actionResult.result && actionResult.result.success) {
+                        if (actionResult.result.background) {
+                            resultText = '🔄 En arrière-plan (5-10 min)';
+                        } else if (actionResult.result.message) {
+                            resultText = actionResult.result.message;
+                        } else {
+                            resultText = 'Réussi';
+                        }
+                    } else {
+                        resultText = `Échoué: ${actionResult.result?.error || 'Erreur inconnue'}`;
+                    }
+
+                    return `
+                        <div class="border-bottom pb-2 mb-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <span>${resultIcon}</span>
+                                <div class="flex-grow-1">
+                                    <strong>${actionResult.action}</strong>
+                                    <div class="small text-muted">${actionResult.reason || ''}</div>
                                 </div>
-                                ${task.tags && task.tags.length > 0 ? `
-                                    <div class="mt-1">
-                                        ${task.tags.map(tag => `<span class="badge bg-secondary">#${tag}</span>`).join(' ')}
-                                    </div>
-                                ` : ''}
+                                <small class="${actionResult.result && actionResult.result.success ? 'text-success' : 'text-danger'}">${resultText}</small>
                             </div>
-                        `;
-                    }).join('');
+                        </div>
+                    `;
+                }).join('') : '';
 
-                    resultDiv.innerHTML = `
-                        <div class="alert alert-success">
-                            <h6><i class="bi bi-list-check me-2"></i>${result.message}</h6>
-                            <div class="mt-3" style="max-height: 400px; overflow-y: auto;">
-                                ${tasksList}
+                resultDiv.innerHTML = `
+                    <div class="alert alert-success">
+                        <h6><i class="bi bi-robot me-2"></i>Réponse LLM</h6>
+                        <div class="mt-2 mb-3 p-3 rounded" style="background: rgba(255,255,255,0.1);">
+                            ${result.actions?.analysis || result.llmResponse || 'Action en cours...'}
+                        </div>
+                        ${result.results && result.results.length > 0 ? `
+                            <h6 class="mt-3"><i class="bi bi-list-check me-2"></i>Actions exécutées</h6>
+                            <div class="mt-2">
+                                ${actionsHtml}
                             </div>
-                        </div>
-                    `;
-                } else {
-                    resultDiv.innerHTML = `
-                        <div class="alert alert-success">
-                            <i class="bi bi-check-circle me-2"></i>
-                            Commande exécutée avec succès
-                        </div>
-                    `;
-                }
+                        ` : ''}
+                        ${result.summary ? `
+                            <div class="mt-3 small text-muted">
+                                ${result.summary.replace(/\n/g, '<br>')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
                 commandInput.value = '';
+
+                // Si des actions sont en arrière-plan, afficher la zone immédiatement
+                const hasBackgroundActions = result.results?.some(r => r.result?.background);
+                if (hasBackgroundActions) {
+                    this.showBackgroundActivityPlaceholder();
+                }
+
+                // Sauvegarder dans l'historique
+                this.saveLLMConversation(
+                    command,
+                    result.llmResponse || result.actions?.analysis || '',
+                    result.results || [],
+                    result.results || []
+                );
 
                 // Rafraîchir les données
                 await this.loadStats();
+                await this.updateSystemStatus();
             } else {
                 resultDiv.innerHTML = `
                     <div class="alert alert-danger">
                         <i class="bi bi-exclamation-triangle me-2"></i>
-                        Erreur: ${result.error || 'Commande échouée'}
+                        Erreur: ${result.error || result.llmResponse || 'Commande échouée'}
                     </div>
                 `;
             }
         } catch (error) {
-            console.error('Command execution error:', error);
+            console.error('LLM command error:', error);
             resultDiv.innerHTML = `
                 <div class="alert alert-danger">
                     <i class="bi bi-exclamation-triangle me-2"></i>
                     Erreur: ${error.message}
                 </div>
             `;
-        } finally {
-            this.hideLoading();
         }
+        // Pas de finally hideLoading() car on n'a pas fait showLoading()
     }
 
     // === CALENDAR TAB ===
@@ -872,6 +1170,34 @@ class OrchestratorApp {
             this.hideLoading();
             this.showAlert('Erreur lors du lancement du nettoyage: ' + (error.message || 'Erreur inconnue'), 'danger');
             console.error('Erreur cleanTimes:', error);
+        }
+    }
+
+    async cancelCurrentActivity() {
+        const confirmed = confirm('🛑 Arrêter l\'activité en cours?\n\nCela va:\n- Annuler immédiatement le processus en cours\n- Arrêter le nettoyage, l\'ajustement ou toute autre opération\n\nContinuer?');
+
+        if (!confirmed) return;
+
+        this.showLoading('🛑 Annulation...');
+        try {
+            const result = await this.apiCall('/api/scheduler/cancel-activity', 'POST');
+
+            this.hideLoading();
+
+            if (result.success) {
+                this.showAlert('🛑 Activité annulée avec succès', 'warning');
+            } else {
+                this.showAlert('Aucune activité en cours à annuler', 'info');
+            }
+
+            console.log('Annulation:', result);
+
+            // Rafraîchir pour voir le changement
+            setTimeout(() => this.refreshScheduler(), 500);
+        } catch (error) {
+            this.hideLoading();
+            this.showAlert('Erreur lors de l\'annulation: ' + (error.message || 'Erreur inconnue'), 'danger');
+            console.error('Erreur cancelCurrentActivity:', error);
         }
     }
 
@@ -1602,6 +1928,78 @@ class OrchestratorApp {
             this.showAlert('Erreur lors de la sauvegarde des paramètres', 'danger');
         }
     }
+
+    // ============================================
+    // HISTORIQUE LLM
+    // ============================================
+
+    saveLLMConversation(userCommand, llmResponse, actions, results) {
+        const history = JSON.parse(localStorage.getItem('llmHistory') || '[]');
+
+        history.push({
+            timestamp: new Date().toISOString(),
+            userCommand,
+            llmResponse,
+            actions: actions.length,
+            success: results.filter(r => r.result?.success).length,
+            failed: results.filter(r => !r.result?.success).length
+        });
+
+        // Garder seulement les 50 dernières conversations
+        if (history.length > 50) {
+            history.shift();
+        }
+
+        localStorage.setItem('llmHistory', JSON.stringify(history));
+        this.displayLLMHistory();
+    }
+
+    displayLLMHistory() {
+        const history = JSON.parse(localStorage.getItem('llmHistory') || '[]');
+        const llmHistoryDiv = document.getElementById('llmHistory');
+        const llmHistoryList = document.getElementById('llmHistoryList');
+
+        if (!llmHistoryList) return;
+
+        if (history.length === 0) {
+            llmHistoryDiv.style.display = 'none';
+            return;
+        }
+
+        llmHistoryDiv.style.display = 'block';
+
+        const reversedHistory = [...history].reverse(); // Plus récent en premier
+        llmHistoryList.innerHTML = reversedHistory.map((conv, idx) => {
+            const time = new Date(conv.timestamp).toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            return `
+                <div class="mb-2 p-2 border-bottom">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <strong class="text-primary">👤 Vous (${time}):</strong>
+                            <div class="ms-3 mb-1">${conv.userCommand}</div>
+                            <strong class="text-success">🤖 LLM:</strong>
+                            <div class="ms-3 small text-muted">
+                                ${conv.actions} action(s) :
+                                <span class="text-success">${conv.success} ✅</span>
+                                ${conv.failed > 0 ? `<span class="text-danger">${conv.failed} ❌</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    clearLLMHistory() {
+        if (confirm('Voulez-vous vraiment effacer l\'historique des conversations ?')) {
+            localStorage.removeItem('llmHistory');
+            document.getElementById('llmHistory').style.display = 'none';
+        }
+    }
 }
 
 // Global functions pour les event handlers HTML
@@ -1615,6 +2013,7 @@ window.analyzeAirtable = () => app.analyzeAirtable();
 window.continuousAdjust = () => app.continuousAdjust();
 window.cleanCalendar = () => app.cleanCalendar();
 window.cleanTimes = () => app.cleanTimes();
+window.cancelCurrentActivity = () => app.cancelCurrentActivity();
 window.generateReport = () => app.generateReport();
 window.refreshScheduler = () => app.refreshScheduler();
 window.showAuthModal = () => app.showAuthModal();

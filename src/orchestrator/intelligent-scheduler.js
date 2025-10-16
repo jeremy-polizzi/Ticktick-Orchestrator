@@ -1,6 +1,7 @@
 const TickTickAPI = require('../api/ticktick-api');
 const GoogleCalendarAPI = require('../api/google-calendar-api');
 const AirtableAPI = require('../api/airtable-api');
+const TaskProjectClassifier = require('./task-project-classifier');
 const { getInstance: getActivityTracker } = require('./activity-tracker');
 const logger = require('../utils/logger');
 const config = require('../config/config');
@@ -20,6 +21,7 @@ class IntelligentScheduler {
     this.ticktick = new TickTickAPI();
     this.googleCalendar = new GoogleCalendarAPI();
     this.airtable = new AirtableAPI();
+    this.classifier = new TaskProjectClassifier();
 
     // Système de priorités P1-P4 (comme Reclaim.ai)
     this.priorities = {
@@ -557,6 +559,87 @@ class IntelligentScheduler {
       tracker.completeStep({ tasksWithoutDate: tasksWithoutDate.length, datesAssigned });
       tracker.updateProgress(40);
 
+      // Step 2.5: Reclassification intelligente des projets (nouveauté!)
+      tracker.addStep('reclassify_projects', '🗂️ Reclassification intelligente dans les bons projets');
+
+      // Charger les projets TickTick pour le classifier
+      await this.classifier.loadProjects(this.ticktick);
+
+      // Classifier toutes les tâches actives (pas seulement celles sans date)
+      const activeTasksToClassify = allTasks.filter(t => !t.isCompleted && t.status !== 2);
+      logger.info(`🗂️ Reclassification de ${activeTasksToClassify.length} tâches actives...`);
+
+      let tasksReclassified = 0;
+      let classificationErrors = 0;
+      const reclassificationBatchSize = 5;
+      const reclassificationPauseMs = 10000; // 10 secondes entre batch
+
+      for (let i = 0; i < activeTasksToClassify.length; i++) {
+        const task = activeTasksToClassify[i];
+
+        try {
+          // Utiliser mode règles intelligentes par défaut (plus rapide)
+          // Si ANTHROPIC_API_KEY est configurée, le LLM sera utilisé automatiquement
+          const suggestedProjectId = await this.classifier.classifyTask(task, false);
+
+          // Déplacer si le projet suggéré est différent du projet actuel
+          if (suggestedProjectId && suggestedProjectId !== task.projectId) {
+            await this.ticktick.updateTask(task.id, {
+              id: task.id,
+              projectId: suggestedProjectId, // ✅ NOUVEAU PROJET!
+              title: task.title,
+              dueDate: task.dueDate,
+              isAllDay: task.isAllDay
+            });
+
+            tasksReclassified++;
+
+            const newProject = this.classifier.projects.find(p => p.id === suggestedProjectId);
+            logger.info(`🗂️ [${tasksReclassified}] Déplacé: "${task.title.substring(0, 40)}..." → ${newProject?.name || suggestedProjectId}`);
+
+            // Update tracker
+            tracker.updateActivityDetails({
+              currentTaskIndex: i + 1,
+              totalTasks: activeTasksToClassify.length,
+              currentTask: task.title.substring(0, 40),
+              newProject: newProject?.name,
+              tasksReclassified,
+              status: 'reclassifying'
+            });
+          }
+
+          // Pause tous les 5 tâches pour rate limiting
+          if ((i + 1) % reclassificationBatchSize === 0 && i + 1 < activeTasksToClassify.length) {
+            logger.info(`⏸️  Pause 10s après ${i + 1} classifications (rate limiting)...`);
+            tracker.updateActivityDetails({
+              status: 'paused',
+              pauseReason: 'Rate limiting (classification)',
+              progress: `${i + 1}/${activeTasksToClassify.length}`
+            });
+            await new Promise(resolve => setTimeout(resolve, reclassificationPauseMs));
+          }
+
+        } catch (error) {
+          classificationErrors++;
+          logger.error(`❌ Erreur classification tâche ${task.id}:`, error.message);
+
+          // Arrêter si trop d'erreurs
+          if (classificationErrors >= 10) {
+            logger.warn(`⚠️ Arrêt classification après ${classificationErrors} erreurs`);
+            break;
+          }
+        }
+      }
+
+      logger.info(`✅ Reclassification terminée: ${tasksReclassified}/${activeTasksToClassify.length} tâches déplacées`);
+
+      tracker.completeStep({
+        tasksAnalyzed: activeTasksToClassify.length,
+        tasksReclassified,
+        classificationErrors
+      });
+      tracker.updateProgress(50);
+
       // Step 3: Détection jours surchargés dans TickTick
       tracker.addStep('conflict_detection', '⚠️ Détection jours surchargés TickTick (>3 tâches)');
 
@@ -577,7 +660,7 @@ class IntelligentScheduler {
       }
 
       tracker.completeStep({ conflictsDetected });
-      tracker.updateProgress(60);
+      tracker.updateProgress(70);
 
       logger.info(`⚠️ ${conflictsDetected} jours surchargés détectés dans TickTick`);
 

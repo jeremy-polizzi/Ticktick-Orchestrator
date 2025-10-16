@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "airtable": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "airtable-mcp-server"
+      ],
+      "env": {
+        "AIRTABLE_API_KEY": "patSuOAf7jdedQZmD.88a26bdda1e507c69dced33833c41832dbca38e4d9fbe0757b0d3aa99a7b9eed"
+      }
+    }
+  }
+}

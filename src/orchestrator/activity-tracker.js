@@ -270,6 +270,62 @@ class ActivityTracker {
     this.activityHistory = [];
     logger.info('Historique d\'activité nettoyé');
   }
+
+  /**
+   * Alias pour endActivity avec status success
+   * @param {object} result - Résultat final
+   */
+  completeActivity(result = {}) {
+    return this.endActivity('success', result);
+  }
+
+  /**
+   * Alias pour endActivity avec status failed
+   * @param {string|Error} error - Erreur
+   */
+  failActivity(error) {
+    const errorMessage = typeof error === 'string' ? error : error.message;
+    return this.endActivity('failed', { error: errorMessage });
+  }
+
+  /**
+   * Annule l'activité en cours
+   * @param {string} reason - Raison de l'annulation
+   */
+  cancelActivity(reason = 'Annulé par l\'utilisateur') {
+    if (!this.currentActivity) {
+      logger.warn('Aucune activité en cours à annuler');
+      return false;
+    }
+
+    const duration = Date.now() - this.currentActivity.startTimestamp;
+
+    this.currentActivity.status = 'cancelled';
+    this.currentActivity.endTime = new Date().toISOString();
+    this.currentActivity.duration = duration;
+    this.currentActivity.cancelReason = reason;
+    this.currentActivity.progress = this.currentActivity.progress || 0;
+
+    logger.warn(`🛑 Activité annulée: ${this.currentActivity.type} - ${reason} (${duration}ms)`);
+
+    // Ajouter à l'historique
+    this.activityHistory.unshift({ ...this.currentActivity });
+    if (this.activityHistory.length > this.maxHistorySize) {
+      this.activityHistory.pop();
+    }
+
+    this.currentActivity = null;
+    this.startTime = null;
+    return true;
+  }
+
+  /**
+   * Vérifie si l'activité en cours a été annulée
+   * Utile pour les boucles longues pour arrêter proprement
+   */
+  isCancelled() {
+    return this.currentActivity && this.currentActivity.status === 'cancelled';
+  }
 }
 
 // Singleton

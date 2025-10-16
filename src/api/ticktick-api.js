@@ -8,9 +8,15 @@ class TickTickAPI {
     this.accessToken = null;
     this.refreshToken = null;
 
-    // Cache en mémoire pour éviter rate limiting (TTL: 30s)
+    // Cache en mémoire pour éviter rate limiting (TTL: 2min)
     this.cache = new Map();
-    this.cacheTTL = 30000; // 30 secondes
+    this.cacheTTL = 120000; // 2 minutes (pour éviter rate limit TickTick)
+
+    // Throttle pour éviter rate limit (100 req/min, 300 req/5min)
+    this.requestQueue = [];
+    this.requestTimestamps = [];
+    this.maxRequestsPerMinute = 80; // Seuil de sécurité (80 au lieu de 100)
+    this.maxRequestsPer5Minutes = 250; // Seuil de sécurité (250 au lieu de 300)
 
     // Configuration axios avec retry automatique
     this.client = axios.create({
@@ -21,9 +27,13 @@ class TickTickAPI {
       }
     });
 
-    // Intercepteur pour gestion automatique des tokens
+    // Intercepteur pour gestion automatique des tokens + throttle rate limit
     this.client.interceptors.request.use(
-      (config) => {
+      async (config) => {
+        // Attendre si nécessaire pour respecter le rate limit TickTick
+        await this.waitForRateLimit();
+
+        // Ajouter le token d'authentification
         if (this.accessToken) {
           config.headers.Authorization = `Bearer ${this.accessToken}`;
         }
@@ -44,6 +54,38 @@ class TickTickAPI {
         return Promise.reject(error);
       }
     );
+  }
+
+  // Système de throttle pour éviter rate limit TickTick
+  async waitForRateLimit() {
+    const now = Date.now();
+
+    // Nettoyer les timestamps anciens (> 5 minutes)
+    this.requestTimestamps = this.requestTimestamps.filter(ts => now - ts < 300000);
+
+    // Vérifier limite 5 minutes (250/300)
+    if (this.requestTimestamps.length >= this.maxRequestsPer5Minutes) {
+      const oldestRequest = this.requestTimestamps[0];
+      const waitTime = 300000 - (now - oldestRequest) + 1000; // +1s de sécurité
+      logger.warn(`⚠️  Rate limit 5min approché (${this.requestTimestamps.length}/${this.maxRequestsPer5Minutes}), attente ${Math.round(waitTime/1000)}s`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      return this.waitForRateLimit(); // Récursif après attente
+    }
+
+    // Vérifier limite 1 minute (80/100)
+    const oneMinuteAgo = now - 60000;
+    const recentRequests = this.requestTimestamps.filter(ts => ts > oneMinuteAgo);
+
+    if (recentRequests.length >= this.maxRequestsPerMinute) {
+      const oldestRecentRequest = recentRequests[0];
+      const waitTime = 60000 - (now - oldestRecentRequest) + 1000; // +1s de sécurité
+      logger.warn(`⚠️  Rate limit 1min approché (${recentRequests.length}/${this.maxRequestsPerMinute}), attente ${Math.round(waitTime/1000)}s`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      return this.waitForRateLimit(); // Récursif après attente
+    }
+
+    // Enregistrer cette requête
+    this.requestTimestamps.push(now);
   }
 
   // Système de cache pour éviter rate limiting TickTick
@@ -70,9 +112,16 @@ class TickTickAPI {
     });
   }
 
-  clearCache() {
-    this.cache.clear();
-    logger.info('Cache TickTick vidé');
+  clearCache(specificKey = null) {
+    if (specificKey) {
+      // Invalider seulement une clé spécifique
+      this.cache.delete(specificKey);
+      logger.debug(`Cache TickTick invalidé pour: ${specificKey}`);
+    } else {
+      // Invalider tout le cache (utilisé rarement)
+      this.cache.clear();
+      logger.info('Cache TickTick vidé complètement');
+    }
   }
 
   // Authentification OAuth
@@ -403,9 +452,22 @@ class TickTickAPI {
 
   async deleteTask(taskId, skipCacheClear = false) {
     try {
-      await this.client.delete(`/open/v1/task/${taskId}`);
+      // Récupérer la tâche pour avoir le projectId (requis par l'API TickTick)
+      // Chercher dans TOUTES les tâches (actives ET complétées)
+      const activeTasks = await this.getTasks(null, false);
+      const completedTasks = await this.getTasks(null, true);
+      const allTasks = [...activeTasks, ...completedTasks];
 
-      logger.info(`Tâche supprimée: ${taskId}`);
+      const task = allTasks.find(t => t.id === taskId);
+
+      if (!task) {
+        throw new Error(`Tâche ${taskId} introuvable`);
+      }
+
+      // Endpoint DELETE simple qui FONCTIONNE: /open/v1/project/{projectId}/task/{taskId}
+      await this.client.delete(`/open/v1/project/${task.projectId}/task/${taskId}`);
+
+      logger.info(`Tâche supprimée: ${taskId} (projet: ${task.projectId})`);
 
       // Invalider le cache après modification (sauf si appelé depuis deleteMultipleTasks)
       if (!skipCacheClear) {

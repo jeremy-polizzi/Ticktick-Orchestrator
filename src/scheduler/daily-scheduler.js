@@ -5,6 +5,7 @@ const CalendarCleaner = require('../orchestrator/calendar-cleaner');
 const SmartOrchestrator = require('../orchestrator/smart-orchestrator');
 const BackupManager = require('../orchestrator/backup-manager');
 const PriorityCalculator = require('../orchestrator/priority-calculator');
+const IntelligentScheduler = require('../orchestrator/intelligent-scheduler');
 const logger = require('../utils/logger');
 const config = require('../config/config');
 
@@ -16,6 +17,7 @@ class DailyScheduler {
     this.smartOrchestrator = new SmartOrchestrator();
     this.backupManager = new BackupManager();
     this.priorityCalculator = new PriorityCalculator();
+    this.intelligentScheduler = new IntelligentScheduler(); // NOUVEAU: Reclaim.ai + Classification
     this.isRunning = false;
     this.scheduledJobs = new Map();
   }
@@ -27,8 +29,9 @@ class DailyScheduler {
       await this.calendarCleaner.initialize();
       await this.smartOrchestrator.initialize();
       await this.backupManager.initialize();
+      await this.intelligentScheduler.initialize(); // NOUVEAU: Reclaim.ai + Classification
 
-      logger.info('DailyScheduler initialisé avec succès (avec SmartOrchestrator et BackupManager)');
+      logger.info('DailyScheduler initialisé avec succès (avec IntelligentScheduler, SmartOrchestrator et BackupManager)');
       return true;
     } catch (error) {
       logger.error('Erreur lors de l\'initialisation du DailyScheduler:', error.message);
@@ -79,8 +82,10 @@ class DailyScheduler {
       // 4. Synchronisation tâches complétées → Airtable
       await this.smartOrchestrator.syncCompletedTasksToAirtable();
 
-      // 5. Réorganisation intelligente
-      await this.performIntelligentReorganization();
+      // 5. Réorganisation intelligente (Reclaim.ai + Classification automatique des projets)
+      logger.info('🔄 Lancement Ajustement Continu (Reclaim.ai + Classification projets)');
+      const adjustmentResult = await this.intelligentScheduler.performContinuousAdjustment();
+      logger.info(`✅ Ajustement terminé: ${adjustmentResult.datesAssigned || 0} dates attribuées, ${adjustmentResult.tasksReclassified || 0} tâches reclassifiées, ${adjustmentResult.tasksRescheduled || 0} replanifiées`);
 
       // 6. Planification des prochains jours
       await this.planUpcomingDays();

@@ -195,6 +195,36 @@ router.post('/continuous-adjust', async (req, res) => {
   }
 });
 
+// Annuler l'activité en cours
+router.post('/cancel-activity', (req, res) => {
+  try {
+    const { getInstance: getActivityTracker } = require('../../orchestrator/activity-tracker');
+    const tracker = getActivityTracker();
+
+    const cancelled = tracker.cancelActivity('Annulé par l\'utilisateur via bouton Stop');
+
+    if (cancelled) {
+      logger.info('🛑 Activité annulée par l\'utilisateur');
+      res.json({
+        success: true,
+        message: '🛑 Activité en cours annulée avec succès'
+      });
+    } else {
+      res.json({
+        success: false,
+        message: 'Aucune activité en cours à annuler'
+      });
+    }
+
+  } catch (error) {
+    logger.error('Erreur annulation activité:', error.message);
+    res.status(500).json({
+      error: 'Erreur lors de l\'annulation',
+      details: error.message
+    });
+  }
+});
+
 // Nettoyer Calendar des tâches auto-générées
 router.post('/clean-calendar', async (req, res) => {
   try {
@@ -344,11 +374,13 @@ router.post('/clean-times', async (req, res) => {
         logger.info(`🕒 ${tasksWithTimes.length} tâches avec horaires trouvées`);
 
         if (tasksWithTimes.length === 0) {
+          logger.info('✅ Aucune tâche avec horaire à nettoyer - Toutes les tâches sont déjà en all-day');
           tracker.completeActivity({
             tasksCleaned: 0,
-            message: 'Aucune tâche avec horaire à nettoyer'
+            tasksTotal: 0,
+            message: 'Aucune tâche avec horaire à nettoyer - Déjà tout en all-day!'
           });
-          return;
+          return; // IMPORTANT: sortir de l'IIFE async
         }
 
         tracker.addStep('cleaning', `🧹 Nettoyage de ${tasksWithTimes.length} horaires`);
@@ -359,8 +391,14 @@ router.post('/clean-times', async (req, res) => {
         const pauseDuration = 15000; // 15 secondes
 
         for (let i = 0; i < tasksWithTimes.length; i++) {
+          const task = tasksWithTimes[i];
+
           try {
-            const task = tasksWithTimes[i];
+            // Validation tâche
+            if (!task || !task.id || !task.dueDate) {
+              logger.error(`❌ Tâche invalide ignorée (index ${i}):`, JSON.stringify(task).substring(0, 100));
+              continue;
+            }
 
             // Extraire juste la date (sans heure)
             const dateOnly = task.dueDate.split('T')[0]; // "2025-10-15"
@@ -378,12 +416,12 @@ router.post('/clean-times', async (req, res) => {
 
             // Update tracker avec progrès
             tracker.updateActivityDetails({
-              currentTask: `"${task.title.substring(0, 40)}..."`,
+              currentTask: `"${(task.title || 'Sans titre').substring(0, 40)}..."`,
               progress: `${cleaned}/${tasksWithTimes.length}`,
               successCount: cleaned
             });
 
-            logger.info(`✅ [${cleaned}/${tasksWithTimes.length}] Nettoyé: "${task.title}"`);
+            logger.info(`✅ [${cleaned}/${tasksWithTimes.length}] Nettoyé: "${task.title || 'Sans titre'}"`);
 
             // Pause tous les 10 tâches
             if ((i + 1) % batchSize === 0 && i + 1 < tasksWithTimes.length) {
@@ -396,7 +434,9 @@ router.post('/clean-times', async (req, res) => {
             }
 
           } catch (error) {
-            logger.error(`❌ Erreur nettoyage tâche ${task.id}:`, error.message);
+            logger.error(`❌ Erreur nettoyage tâche ${task?.id || 'ID inconnu'} "${task?.title || 'Sans titre'}":`, error.message);
+            logger.error('Stack:', error.stack);
+            // Continue la boucle même en cas d'erreur
           }
         }
 
@@ -409,8 +449,9 @@ router.post('/clean-times', async (req, res) => {
         });
 
       } catch (error) {
-        logger.error('❌ Erreur nettoyage horaires:', error.message);
-        tracker.failActivity(error.message);
+        logger.error('❌ Erreur globale nettoyage horaires:', error.message);
+        logger.error('Stack complet:', error.stack);
+        tracker.failActivity(error.message || 'Erreur inconnue');
       }
     })();
 

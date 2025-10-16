@@ -24,6 +24,7 @@
   "author": "Jeremy Polizzi - Plus de Clients",
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0",
     "airtable": "^0.12.2",
     "axios": "^1.6.0",
     "bcryptjs": "^2.4.3",
@@ -34,6 +35,7 @@
     "express-rate-limit": "^7.1.5",
     "google-auth-library": "^9.4.0",
     "googleapis": "^128.0.0",
+    "groq-sdk": "^0.33.0",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "moment": "^2.29.4",

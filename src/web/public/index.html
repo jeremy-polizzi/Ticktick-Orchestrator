@@ -413,6 +413,93 @@
                     <h6 class="mb-2" style="color: #004085 !important;"><i class="bi bi-info-circle"></i> Tableau de bord</h6>
                     <p class="mb-0 small" style="color: #004085 !important;">Visualisez l'état des connexions et exécutez des commandes en langage naturel pour gérer vos tâches rapidement.</p>
                 </div>
+
+                <!-- État du Système en Temps Réel -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header" style="background: linear-gradient(135deg, var(--primary-color) 0%, #3366cc 100%); border: none;">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-cpu"></i> État du Système en Temps Réel
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <!-- Serveur -->
+                                    <div class="col-md-3 mb-3">
+                                        <div class="p-3 rounded" style="background: rgba(64, 128, 253, 0.1);">
+                                            <h6 class="mb-2"><i class="bi bi-server"></i> Serveur</h6>
+                                            <div id="systemServerStatus">
+                                                <span class="status-indicator status-loading"></span>
+                                                <span>Vérification...</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Orchestrateur -->
+                                    <div class="col-md-3 mb-3">
+                                        <div class="p-3 rounded" style="background: rgba(64, 128, 253, 0.1);">
+                                            <h6 class="mb-2"><i class="bi bi-robot"></i> Orchestrateur</h6>
+                                            <div id="systemOrchestratorStatus">
+                                                <span class="status-indicator status-loading"></span>
+                                                <span>Vérification...</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Activité en cours -->
+                                    <div class="col-md-3 mb-3">
+                                        <div class="p-3 rounded" style="background: rgba(64, 128, 253, 0.1);">
+                                            <h6 class="mb-2"><i class="bi bi-activity"></i> Activité</h6>
+                                            <div id="systemCurrentActivity">
+                                                <small>Aucune activité</small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Santé -->
+                                    <div class="col-md-3 mb-3">
+                                        <div class="p-3 rounded" style="background: rgba(64, 128, 253, 0.1);">
+                                            <h6 class="mb-2"><i class="bi bi-heart-pulse"></i> Santé</h6>
+                                            <div id="systemHealth">
+                                                <span class="status-indicator status-loading"></span>
+                                                <span>Vérification...</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Informations détaillées -->
+                                <div class="row mt-3">
+                                    <div class="col-md-6">
+                                        <small><i class="bi bi-clock-history"></i> <strong>Dernière exécution:</strong></small>
+                                        <div id="systemLastRun" class="mt-1">
+                                            <small class="text-muted">Jamais</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small><i class="bi bi-calendar-event"></i> <strong>Prochaine exécution:</strong></small>
+                                        <div id="systemNextRun" class="mt-1">
+                                            <small class="text-muted">Non programmée</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Barre de progression si activité en cours -->
+                                <div id="systemProgressBar" class="mt-3 d-none">
+                                    <small class="mb-1 d-block" id="systemProgressLabel">Progression: 0%</small>
+                                    <div class="progress" style="height: 20px;">
+                                        <div id="systemProgressBarInner" class="progress-bar progress-bar-striped progress-bar-animated"
+                                             role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                            0%
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="row">
                     <!-- Status Cards -->
                     <div class="col-md-4 mb-4">
@@ -459,18 +546,47 @@
                         <div class="card">
                             <div class="card-header">
                                 <h5 class="mb-0">
-                                    <i class="bi bi-chat-text"></i> Commandes en Langage Naturel
+                                    <i class="bi bi-robot"></i> LLM Superintelligent - Parle-moi directement
                                 </h5>
                             </div>
                             <div class="card-body">
                                 <div class="input-group mb-3">
                                     <input type="text" class="form-control command-input" id="naturalCommand"
-                                           placeholder="Exemple: Déplacer toutes les tâches #urgent vers Aujourd'hui">
+                                           placeholder="Exemple: Relance tous les prospects >15j sans contact">
                                     <button class="btn btn-primary" onclick="executeCommand()">
                                         <i class="bi bi-send"></i> Exécuter
                                     </button>
                                 </div>
                                 <div id="commandResult" class="mt-3"></div>
+
+                                <!-- Activités en arrière-plan -->
+                                <div id="backgroundActivities" class="mt-3" style="display: none;">
+                                    <div class="alert alert-info">
+                                        <h6 class="mb-2">
+                                            <i class="bi bi-hourglass-split me-2"></i>
+                                            Activités en cours
+                                        </h6>
+                                        <div id="backgroundActivitiesList"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Historique des conversations -->
+                                <div id="llmHistory" class="mt-3" style="display: none;">
+                                    <div class="card">
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-0">
+                                                <i class="bi bi-chat-dots me-2"></i>
+                                                Historique des conversations
+                                            </h6>
+                                            <button class="btn btn-sm btn-outline-secondary" onclick="app.clearLLMHistory()">
+                                                <i class="bi bi-trash"></i> Effacer
+                                            </button>
+                                        </div>
+                                        <div class="card-body p-2" style="max-height: 400px; overflow-y: auto;">
+                                            <div id="llmHistoryList"></div>
+                                        </div>
+                                    </div>
+                                </div>
 
                                 <div class="mt-3">
                                     <h6>Exemples de commandes :</h6>
@@ -612,6 +728,9 @@
                         </button>
                         <button class="btn btn-warning me-2" onclick="cleanTimes()" title="Retire TOUS les horaires des tâches (conversion en all-day)">
                             <i class="bi bi-clock"></i> Nettoyer Horaires
+                        </button>
+                        <button class="btn btn-danger me-2" onclick="cancelCurrentActivity()" title="Arrêter l'activité en cours (Nettoyage, Ajustement, etc.)">
+                            <i class="bi bi-stop-circle-fill"></i> Stop
                         </button>
                         <button class="btn btn-primary" onclick="refreshScheduler()">
                             <i class="bi bi-arrow-clockwise"></i> Actualiser

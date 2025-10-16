@@ -20,6 +20,7 @@ const dashboardRoutes = require('./web/routes/dashboard');
 const commandsRoutes = require('./web/routes/commands');
 const backupRoutes = require('./web/routes/backup');
 const apiRoutes = require('./web/routes/api');
+const llmRoutes = require('./web/routes/llm'); // NOUVEAU: LLM Agent superintelligent
 
 // Middleware d'authentification
 const { authenticateToken } = require('./web/middleware/auth');
@@ -220,6 +221,7 @@ class OrchestratorApp {
     this.app.use('/api/dashboard', authenticateToken, dashboardRoutes);
     this.app.use('/api/commands', authenticateToken, commandsRoutes);
     this.app.use('/api/backup', authenticateToken, backupRoutes);
+    this.app.use('/api/llm', authenticateToken, llmRoutes); // NOUVEAU: LLM Agent superintelligent
     this.app.use('/api', authenticateToken, apiRoutes);
 
     // Route catch-all - rediriger vers login
