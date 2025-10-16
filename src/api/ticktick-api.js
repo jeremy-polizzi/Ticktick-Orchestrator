@@ -7,6 +7,7 @@ class TickTickAPI {
     this.baseUrl = config.ticktick.baseUrl;
     this.accessToken = null;
     this.refreshToken = null;
+    this.inboxId = 'inbox127524840'; // ID de l'Inbox TickTick (fixe pour ce compte)
 
     // Cache en mémoire pour éviter rate limiting (TTL: 2min)
     this.cache = new Map();
@@ -373,12 +374,22 @@ class TickTickAPI {
           }
         }
 
+        // ✅ RÉCUPÉRER AUSSI LES TÂCHES INBOX (qui ne sont pas dans un projet)
+        try {
+          const inboxResponse = await this.client.get(`/open/v1/project/${this.inboxId}/data`);
+          const inboxTasks = inboxResponse.data.tasks || [];
+          allTasks = allTasks.concat(inboxTasks);
+          logger.info(`${inboxTasks.length} tâches Inbox ajoutées aux ${allTasks.length - inboxTasks.length} tâches de projets`);
+        } catch (error) {
+          logger.warn(`Impossible de récupérer les tâches Inbox (${this.inboxId}):`, error.message);
+        }
+
         // Filtrer par statut completed
         const filteredTasks = completed
           ? allTasks.filter(task => task.status === 2)
           : allTasks.filter(task => task.status !== 2);
 
-        logger.info(`${filteredTasks.length} tâches récupérées depuis TickTick (${projects.length} projets)`);
+        logger.info(`${filteredTasks.length} tâches récupérées depuis TickTick (${projects.length} projets + Inbox)`);
 
         // Sauvegarder en cache
         this.setCache(cacheKey, filteredTasks);
