@@ -49,8 +49,8 @@ class IntelligentAgent {
       const geminiApiKey = process.env.GEMINI_API_KEY;
       if (geminiApiKey) {
         const genAI = new GoogleGenerativeAI(geminiApiKey);
-        this.gemini = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
-        logger.info('✅ Google Gemini initialisé (fallback)');
+        this.gemini = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        logger.info('✅ Google Gemini initialisé (Gemini 2.5 Flash - fallback)');
       } else {
         logger.warn('⚠️  GEMINI_API_KEY non configurée');
       }
